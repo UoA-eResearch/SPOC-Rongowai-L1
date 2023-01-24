@@ -3,6 +3,8 @@ import netCDF4 as nc
 import numpy as np
 import array
 import rasterio
+from astropy.time import Time as astro_time
+import time
 
 # from rasterio.plot import show
 from PIL import Image
@@ -201,3 +203,66 @@ RHCP_pattern = {
 # load physical scattering area LUT
 phy_ele_filename = Path("phy_ele_size.dat")  # same path as DEM
 phy_ele_size = np.loadtxt(dem_path.joinpath(phy_ele_filename))
+
+
+### ---------------------- Part 1: General processing
+# This part derives global constants, timestamps, and all the other
+# parameters at ddm timestamps
+
+
+def gps2utc(gpsweek, gpsseconds):
+    """GPS time to unix timestamp.
+
+    Parameters
+    ----------
+    gpsweek : int
+        GPS week number, i.e. 1866.
+    gpsseconds : int
+        Number of seconds since the beginning of week.
+
+    Returns
+    -------
+    numpy.float64
+        Unix timestamp (UTC time).
+    """
+    secs_in_week = 604800
+    secs = gpsweek * secs_in_week + gpsseconds
+
+    t_gps = astro_time(secs, format="gps")
+    t_utc = astro_time(t_gps, format="iso", scale="utc")
+
+    return t_utc.unix
+
+
+def utc2gps(timestamp):
+    """unix timestamp to GPS.
+
+    Parameters
+    ----------
+    numpy.float64
+        Unix timestamp (UTC time).
+
+    Returns
+    -------
+    gpsweek : int
+        GPS week number, i.e. 1866.
+    gpsseconds : int
+        Number of seconds since the beginning of week.
+    """
+    secs_in_week = 604800
+    t_utc = astro_time(timestamp, format="unix", scale="utc")
+    t_gps = astro_time(t_utc, format="gps")
+    gpsweek, gpsseconds = divmod(t_gps.value, secs_in_week)
+    return gpsweek, gpsseconds
+
+
+# make array (ddm_pvt_bias) of non_coherent_integrations divided by 2
+ddm_pvt_bias = non_coherent_integrations / 2
+# make array (pvt_utc) of gps to unix time (see above)
+pvt_utc = np.array(
+    [gps2utc(week, pvt_gps_sec[i]) for i, week in enumerate(pvt_gps_week)]
+)
+# make array (ddm_utc) of ddm_pvt_bias + pvt_utc
+ddm_utc = pvt_utc + ddm_pvt_bias
+# make arrays (gps_week, gps_tow) of ddm_utc to gps week/sec (inc. 1/2*integration time)
+gps_week, gps_tow = utc2gps(ddm_utc)
