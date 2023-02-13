@@ -4,9 +4,12 @@ import numpy as np
 import array
 import rasterio
 from astropy.time import Time as astro_time
-import time
+from scipy.interpolate import interp1d, interpn
+import pyproj
+from datetime import datetime, timedelta
 
-# from rasterio.plot import show
+
+import matplotlib.pyplot as plt
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None
@@ -158,6 +161,7 @@ with open(landmask_path.joinpath(landmask_filename), "rb") as f:
 landmask_nz = {
     "lat": np.linspace(lat_min, lat_max, num_lat),
     "lon": np.linspace(lon_min, lon_max, num_lon),
+    # ele is actually a distance to coast value...
     "ele": np.reshape(map_data, (-1, num_lat)),
 }
 
@@ -266,3 +270,113 @@ pvt_utc = np.array(
 ddm_utc = pvt_utc + ddm_pvt_bias
 # make arrays (gps_week, gps_tow) of ddm_utc to gps week/sec (inc. 1/2*integration time)
 gps_week, gps_tow = utc2gps(ddm_utc)
+
+
+def interp_ddm(x, y, x_ddm):
+    interp_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
+    return interp_func(x_ddm)
+
+
+rx_pos_x = interp_ddm(pvt_utc, rx_pos_x_pvt, ddm_utc)
+rx_pos_y = interp_ddm(pvt_utc, rx_pos_y_pvt, ddm_utc)
+rx_pos_z = interp_ddm(pvt_utc, rx_pos_z_pvt, ddm_utc)
+rx_pos_xyz = [rx_pos_x, rx_pos_y, rx_pos_z]
+
+rx_vel_x = interp_ddm(pvt_utc, rx_vel_x_pvt, ddm_utc)
+rx_vel_y = interp_ddm(pvt_utc, rx_vel_y_pvt, ddm_utc)
+rx_vel_z = interp_ddm(pvt_utc, rx_vel_z_pvt, ddm_utc)
+rx_vel_xyz = [rx_vel_x, rx_vel_y, rx_vel_z]
+
+rx_roll = interp_ddm(pvt_utc, rx_roll_pvt, ddm_utc)
+rx_pitch = interp_ddm(pvt_utc, rx_pitch_pvt, ddm_utc)
+rx_yaw = interp_ddm(pvt_utc, rx_yaw_pvt, ddm_utc)
+rx_attitude = [rx_roll, rx_pitch, rx_yaw]
+
+rx_clk_bias_m = interp_ddm(pvt_utc, rx_clk_bias_m_pvt, ddm_utc)
+rx_clk_drift_mps = interp_ddm(pvt_utc, rx_clk_drift_mps_pvt, ddm_utc)
+rx_clk = [rx_clk_bias_m, rx_clk_drift_mps]
+
+J = 20  # maximum NGRx capacity
+
+add_range_to_sp = np.full([*add_range_to_sp_pvt.shape], np.nan)
+for ngrx_channel in range(J):
+    add_range_to_sp[:, ngrx_channel] = interp_ddm(
+        pvt_utc, add_range_to_sp_pvt[:, ngrx_channel], ddm_utc
+    )
+
+ant_temp_zenith = interp_ddm(eng_timestamp, zenith_ant_temp_eng, ddm_utc)
+ant_temp_nadir = interp_ddm(eng_timestamp, nadir_ant_temp_eng, ddm_utc)
+
+# function is depreciated,see following url
+# https://pyproj4.github.io/pyproj/stable/gotchas.html#upgrading-to-pyproj-2-from-pyproj-1
+ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
+lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
+lon, lat, alt = pyproj.transform(ecef, lla, *rx_pos_xyz, radians=False)
+rx_pos_lla = [lat, lon, alt]
+
+status_flags_one_hz = interpn(
+    points=(landmask_nz["lon"], landmask_nz["lat"]),
+    values=landmask_nz["ele"],
+    xi=(lon, lat),
+    method="linear",
+)
+status_flags_one_hz[status_flags_one_hz > 0] = 5
+status_flags_one_hz[status_flags_one_hz <= 0] = 4
+
+time_coverage_start_obj = datetime.utcfromtimestamp(ddm_utc[0])
+time_coverage_start = time_coverage_start_obj.strftime("%Y-%m-%d %H:%M:%S")
+time_coverage_end_obj = datetime.utcfromtimestamp(ddm_utc[-1])
+time_coverage_end = time_coverage_end_obj.strftime("%d-%m-%Y %H:%M:%S")
+time_coverage_resolution = ddm_utc[1] - ddm_utc[0]
+hours, remainder = divmod((ddm_utc[-1] - ddm_utc[0] + 1), 3600)
+minutes, seconds = divmod(remainder, 60)
+time_coverage_duration = f"P0DT{int(hours)}H{int(minutes)}M{int(seconds)}S"
+
+aircraft_reg = "ZK-NFA"  # default value
+ddm_source = 2  # 1 = GPS signal simulator, 2 = aircraft
+ddm_time_type_selector = 1  # 1 = middle of DDM sampling period
+delay_resolution = 0.25  # unit in chips
+dopp_resolution = 500  # unit in Hz
+dem_source = "SRTM30"
+
+# write algorithm and LUT versions
+l1_algorithm_version = "1.1"
+l1_data_version = "1"
+l1a_sig_LUT_version = "1"
+l1a_noise_LUT_version = "1"
+ngrx_port_mapping_version = "1"
+nadir_ant_data_version = "1"
+zenith_ant_data_version = "1"
+prn_sv_maps_version = "1"
+gps_eirp_param_version = "7"
+land_mask_version = "1"
+surface_type_version = "1"
+mean_sea_surface_version = "1"
+per_bin_ant_version = "1"
+
+# write timestamps and ac-related variables
+# 0-indexed sample and DDM
+# Skipping these right now to avoid dupication of variables
+
+
+### ---------------------- Part 2: Derive TX related variables
+# This part derives TX positions and velocities, maps between PRN and SVN,
+# and gets track ID
+# This part is to deal with the new SP3 naming policy, for old SP3 naming
+# policy (Nov 2022 and before), refer to the next section (default commented)
+
+trans_id_unique = np.unique(transmitter_id)
+trans_id_unique = trans_id_unique[trans_id_unique > 0]
+
+# print(time_coverage_start_obj.day, time_coverage_end_obj.day)
+
+if time_coverage_start_obj.day == time_coverage_end_obj.day:
+    day_change_flag = 0
+else:
+    day_change_flag = 1
+    # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
+    change_idx = np.where(np.diff(np.floor(gps_tow / 86400)) > 0)[0][0] + 1
+
+
+for ngrx_channel in range(J / 2):  # 20 channels, 10 satellites
+    pass
