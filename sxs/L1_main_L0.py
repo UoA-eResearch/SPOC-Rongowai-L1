@@ -6,10 +6,12 @@ import rasterio
 from astropy.time import Time as astro_time
 from scipy.interpolate import interp1d, interpn
 import pyproj
-from datetime import datetime, timedelta
+from datetime import datetime
+from ctypes import CDLL
+from ctypes import byref
+from ctypes import c_double
 
-
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 from PIL import Image
 
 Image.MAX_IMAGE_PIXELS = None
@@ -17,7 +19,7 @@ Image.MAX_IMAGE_PIXELS = None
 ### ---------------------- Prelaunch 1: Load L0 data
 
 
-raw_data_path = Path().absolute().joinpath(Path("./dat/raw/"))
+raw_data_path = Path().absolute().joinpath(Path("../dat/raw/"))
 L0_filename = Path("20221103-121416_NZNV-NZCH.nc")
 # L0_filenames = glob.glob("*.nc")
 
@@ -114,14 +116,14 @@ nadir_ant_temp_eng = load_netcdf(L0_dataset["/eng/nadir_ant_temp"])
 ### ---------------------- Prelaunch 2 - define external data paths and filenames
 
 # load L1a calibration tables
-L1a_path = Path().absolute().joinpath(Path("./dat/L1a_cal/"))
+L1a_path = Path().absolute().joinpath(Path("../dat/L1a_cal/"))
 L1a_cal_ddm_counts_db_filename = Path("L1A_cal_ddm_counts_dB.dat")
 L1a_cal_ddm_power_dbm_filename = Path("L1A_cal_ddm_power_dBm.dat")
 L1a_cal_ddm_counts_db = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_counts_db_filename))
 L1a_cal_ddm_power_dbm = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_power_dbm_filename))
 
 # load SRTM_30 DEM
-dem_path = Path().absolute().joinpath(Path("./dat/dem/"))
+dem_path = Path().absolute().joinpath(Path("../dat/dem/"))
 dem_filename = Path("nzsrtm_30_v1.tif")
 dem = rasterio.open(dem_path.joinpath(dem_filename))
 dem = {
@@ -131,7 +133,7 @@ dem = {
 }
 
 # load DTU10 model
-dtu_path = Path().absolute().joinpath(Path("./dat/dtu/"))
+dtu_path = Path().absolute().joinpath(Path("../dat/dtu/"))
 dtu_filename = Path("dtu10_v1.dat")
 with open(dtu_path.joinpath(dtu_filename), "rb") as f:
     lat_min = load_dat_file(f, "d", 1)
@@ -148,7 +150,7 @@ dtu10 = {
 }
 
 # load ocean/land (distance to coast) mask
-landmask_path = Path().absolute().joinpath(Path("./dat/cst/"))
+landmask_path = Path().absolute().joinpath(Path("../dat/cst/"))
 landmask_filename = Path("dist_to_coast_nz_v1.dat")
 with open(landmask_path.joinpath(landmask_filename), "rb") as f:
     lat_min = load_dat_file(f, "d", 1)
@@ -166,7 +168,7 @@ landmask_nz = {
 }
 
 # process landcover mask
-lcv_path = Path().absolute().joinpath(Path("./dat/lcv/"))
+lcv_path = Path().absolute().joinpath(Path("../dat/lcv/"))
 lcv_filename = Path("lcv.png")
 lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 
@@ -183,14 +185,14 @@ lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 # }
 
 # load PRN-SV and SV-EIRP(static) LUT
-gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
+gps_path = Path().absolute().joinpath(Path("../dat/gps/"))
 SV_PRN_filename = Path("PRN_SV_LUT_v1.dat")
 SV_eirp_filename = Path("GPS_SV_EIRP_Params_v7.dat")
 SV_PRN_LUT = np.loadtxt(gps_path.joinpath(SV_PRN_filename), usecols=(0, 1))
 SV_eirp_LUT = np.loadtxt(gps_path.joinpath(SV_eirp_filename))
 
 # load and process nadir NGRx-GNSS antenna patterns
-rng_path = Path().absolute().joinpath(Path("./dat/rng/"))
+rng_path = Path().absolute().joinpath(Path("../dat/rng/"))
 LHCP_L_filename = Path("GNSS_LHCP_L_gain_db_i_v1.dat")
 LHCP_R_filename = Path("GNSS_LHCP_R_gain_db_i_v1.dat")
 RHCP_L_filename = Path("GNSS_RHCP_L_gain_db_i_v1.dat")
@@ -377,6 +379,14 @@ else:
     # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
     change_idx = np.where(np.diff(np.floor(gps_tow / 86400)) > 0)[0][0] + 1
 
-
-for ngrx_channel in range(J / 2):  # 20 channels, 10 satellites
+for ngrx_channel in range(int(J / 2)):  # 20 channels, 10 satellites
     pass
+
+c_path = Path().absolute().joinpath(Path("./lib/"))
+# GPS_GetSVInfo_filename = Path("mike_test.so")
+# GPS_GetSVInfo = CDLL(str(c_path.joinpath(GPS_GetSVInfo_filename)))
+# GPS_GetSVInfo.main()
+GPS_GetSVInfo_filename = Path("GPS_GetSVInfo.so")
+GPS_GetSVInfo = CDLL(str(c_path.joinpath(GPS_GetSVInfo_filename)))
+GPS_GetSVInfo.main()
+print("done!!!")

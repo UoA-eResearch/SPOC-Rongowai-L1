@@ -39,8 +39,6 @@
 #include <time.h>
 
 #include "intrpsp3c.h"
-#include "mex.h"                            // header interfacing with cpp
-#include "matrix.h"                         // header handling structure
 
 #define SUCCESS 100
 #define FAILURE 101
@@ -73,7 +71,7 @@ int GetSVInfo(unsigned int prn, unsigned int week, double TOW, double sat_pos[],
     mysp3.setPathFilenameMode(infileXname);
     mysp3.readHeader();
 
-    retval = (int)mysp3.getSVPosVel(currEpoch, prnNum_str, PosVel);    
+    retval = (int)mysp3.getSVPosVel(currEpoch, prnNum_str, PosVel);
     
     if (retval == 0)
     {
@@ -87,7 +85,7 @@ int GetSVInfo(unsigned int prn, unsigned int week, double TOW, double sat_pos[],
         sat_pos[6] = PosVel[6] * 1000;
         sat_pos[7] = PosVel[7] / 1e6;   // sec/sec
     }
-    
+
     else
     {
         sat_pos[0] = 0;
@@ -100,36 +98,25 @@ int GetSVInfo(unsigned int prn, unsigned int week, double TOW, double sat_pos[],
         sat_pos[6] = 0;
         sat_pos[7] = 0;
     }
-    
+
     return retval;    
 }
 
-/* The gateway function */
-void mexFunction(int nlhs, mxArray *plhs[], int nrhs, const mxArray *prhs[])
+int main()
 {
-    // variable declarations here
-    unsigned int prn;                       //satellite prn
-    unsigned int week;                      //gps week
-    double       TOW;                       //time of gps week
-    char         *filename;                 //sp3-d filename
+    //s_SV_Pos sat_pos;
+    int retval = 0;
+    char infilename[200] = "/mnt/c/Users/mlav736/Documents/GitHub/SPOC-Rongowai-L1/sxs/lib/igr21384.sp3";  //sp3-d filename is defined here
 
-    int          retval;
-    int          array_size;
-    double       *outArray;
-    
-    //char filename[200] = "igr21384.sp3";    // define sp3-d filename here
+    unsigned int prn = 32;
+    unsigned int week = 2138;
+    double TOW = 345618.499262;
 
-    // read input from matlab calling
-    prn  = mxGetScalar(prhs[0]);
-    week = mxGetScalar(prhs[1]);
-    TOW  = mxGetScalar(prhs[2]);
-    filename = mxArrayToString(prhs[3]);
+    retval = GetSVInfo(prn, week, TOW, sat_pos, infilename);
 
-    // create a pointer to the output array
-    array_size = 8;
-    plhs[0] = mxCreateDoubleMatrix(1,array_size,mxREAL);
-    outArray = mxGetPr(plhs[0]);
-
-    // call GetSVInfo
-    retval = GetSVInfo(prn,week,TOW,outArray,filename);
+    //printf(PosVel);
+    printf("\nGPS Position XYZ ECEF = %lf,%lf,%lf \n", sat_pos[0], sat_pos[1], sat_pos[2]);
+    printf("GPS Velocity XYZ ECEF = %lf,%lf,%lf \n", sat_pos[4], sat_pos[5], sat_pos[6]);
+    printf("GPS clock bias and drift = %12.11f,%12.11f \n", sat_pos[3], sat_pos[7]);
+    return 0;
 }
