@@ -287,8 +287,8 @@ int SP3cFile::readHeader()
         if( atoi( sp3PRNs[indexACC + 1].substr(1,2).c_str() ) > 0 )
         {
           svAccur[indexACC + 1] = (unsigned short) accur;
-          if( accur <= 0 )
-            printf("Accuracy warning in SP3 file processing");
+          //if( accur <= 0 )
+          //  printf("Accuracy warning in SP3 file processing");
           indexACC++;
         }
       }
