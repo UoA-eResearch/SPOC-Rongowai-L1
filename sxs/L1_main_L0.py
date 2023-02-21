@@ -1,55 +1,34 @@
 from pathlib import Path
 import netCDF4 as nc
 import numpy as np
-import array
 import rasterio
-from astropy.time import Time as astro_time
-from scipy.interpolate import interp1d, interpn
+from scipy.interpolate import interpn
+from scipy import constants
 import pyproj
 from datetime import datetime
-from ctypes import CDLL
-from ctypes import byref
-from ctypes import c_double
-
-# import matplotlib.pyplot as plt
+from ctypes import CDLL, c_double, c_uint, c_char_p, byref
 from PIL import Image
 
+from gps_time import gps2utc, utc2gps
+from load_files import (
+    load_netcdf,
+    load_antenna_pattern,
+    interp_ddm,
+    get_orbit_file,
+    load_dat_file_grid,
+)
+
 Image.MAX_IMAGE_PIXELS = None
+
 
 ### ---------------------- Prelaunch 1: Load L0 data
 
 
-raw_data_path = Path().absolute().joinpath(Path("../dat/raw/"))
+raw_data_path = Path().absolute().joinpath(Path("./dat/raw/"))
 L0_filename = Path("20221103-121416_NZNV-NZCH.nc")
 # L0_filenames = glob.glob("*.nc")
 
 L0_dataset = nc.Dataset(raw_data_path.joinpath(L0_filename))
-
-# Removes masked data from 1D, D, & 4D NetCDF variables using their masks
-def load_netcdf(netcdf_variable):
-    if len(netcdf_variable.shape[:]) == 1:
-        return netcdf_variable[:].compressed()
-    if len(netcdf_variable.shape[:]) == 2:
-        return np.ma.compress_rows(np.ma.masked_invalid(netcdf_variable[:]))
-    if len(netcdf_variable.shape[:]) == 4:
-        count_mask = ~netcdf_variable[:, 0, 0, 0].mask
-        return netcdf_variable[count_mask, :, :, :]
-
-
-def load_dat_file(file, typecode, size):
-    value = array.array(typecode)
-    value.fromfile(file, size)
-    if size == 1:
-        return value.tolist()[0]
-    else:
-        return value.tolist()
-
-
-def load_antenna_pattern(filename):
-    with open(filename, "rb") as f:
-        ignore_values = load_dat_file(f, "d", 5)
-        ant_data = load_dat_file(f, "d", 3601 * 1201)
-    return np.reshape(ant_data, (-1, 3601))
 
 
 ### rx -related variables
@@ -116,14 +95,14 @@ nadir_ant_temp_eng = load_netcdf(L0_dataset["/eng/nadir_ant_temp"])
 ### ---------------------- Prelaunch 2 - define external data paths and filenames
 
 # load L1a calibration tables
-L1a_path = Path().absolute().joinpath(Path("../dat/L1a_cal/"))
+L1a_path = Path().absolute().joinpath(Path("./dat/L1a_cal/"))
 L1a_cal_ddm_counts_db_filename = Path("L1A_cal_ddm_counts_dB.dat")
 L1a_cal_ddm_power_dbm_filename = Path("L1A_cal_ddm_power_dBm.dat")
 L1a_cal_ddm_counts_db = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_counts_db_filename))
 L1a_cal_ddm_power_dbm = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_power_dbm_filename))
 
 # load SRTM_30 DEM
-dem_path = Path().absolute().joinpath(Path("../dat/dem/"))
+dem_path = Path().absolute().joinpath(Path("./dat/dem/"))
 dem_filename = Path("nzsrtm_30_v1.tif")
 dem = rasterio.open(dem_path.joinpath(dem_filename))
 dem = {
@@ -133,42 +112,18 @@ dem = {
 }
 
 # load DTU10 model
-dtu_path = Path().absolute().joinpath(Path("../dat/dtu/"))
+dtu_path = Path().absolute().joinpath(Path("./dat/dtu/"))
 dtu_filename = Path("dtu10_v1.dat")
-with open(dtu_path.joinpath(dtu_filename), "rb") as f:
-    lat_min = load_dat_file(f, "d", 1)
-    lat_max = load_dat_file(f, "d", 1)
-    num_lat = load_dat_file(f, "H", 1)
-    lon_min = load_dat_file(f, "d", 1)
-    lon_max = load_dat_file(f, "d", 1)
-    num_lon = load_dat_file(f, "H", 1)
-    map_data = load_dat_file(f, "d", num_lat * num_lon)
-dtu10 = {
-    "lat": np.linspace(lat_min, lat_max, num_lat),
-    "lon": np.linspace(lon_min, lon_max, num_lon),
-    "ele": np.reshape(map_data, (-1, num_lat)),
-}
+dtu10 = load_dat_file_grid(dtu_path.joinpath(dtu_filename))
 
 # load ocean/land (distance to coast) mask
-landmask_path = Path().absolute().joinpath(Path("../dat/cst/"))
+landmask_path = Path().absolute().joinpath(Path("./dat/cst/"))
 landmask_filename = Path("dist_to_coast_nz_v1.dat")
-with open(landmask_path.joinpath(landmask_filename), "rb") as f:
-    lat_min = load_dat_file(f, "d", 1)
-    lat_max = load_dat_file(f, "d", 1)
-    num_lat = load_dat_file(f, "H", 1)
-    lon_min = load_dat_file(f, "d", 1)
-    lon_max = load_dat_file(f, "d", 1)
-    num_lon = load_dat_file(f, "H", 1)
-    map_data = load_dat_file(f, "d", num_lat * num_lon)
-landmask_nz = {
-    "lat": np.linspace(lat_min, lat_max, num_lat),
-    "lon": np.linspace(lon_min, lon_max, num_lon),
-    # ele is actually a distance to coast value...
-    "ele": np.reshape(map_data, (-1, num_lat)),
-}
+landmask_nz = load_dat_file_grid(landmask_path.joinpath(landmask_filename))
+
 
 # process landcover mask
-lcv_path = Path().absolute().joinpath(Path("../dat/lcv/"))
+lcv_path = Path().absolute().joinpath(Path("./dat/lcv/"))
 lcv_filename = Path("lcv.png")
 lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 
@@ -185,14 +140,14 @@ lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 # }
 
 # load PRN-SV and SV-EIRP(static) LUT
-gps_path = Path().absolute().joinpath(Path("../dat/gps/"))
+gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
 SV_PRN_filename = Path("PRN_SV_LUT_v1.dat")
 SV_eirp_filename = Path("GPS_SV_EIRP_Params_v7.dat")
 SV_PRN_LUT = np.loadtxt(gps_path.joinpath(SV_PRN_filename), usecols=(0, 1))
 SV_eirp_LUT = np.loadtxt(gps_path.joinpath(SV_eirp_filename))
 
 # load and process nadir NGRx-GNSS antenna patterns
-rng_path = Path().absolute().joinpath(Path("../dat/rng/"))
+rng_path = Path().absolute().joinpath(Path("./dat/rng/"))
 LHCP_L_filename = Path("GNSS_LHCP_L_gain_db_i_v1.dat")
 LHCP_R_filename = Path("GNSS_LHCP_R_gain_db_i_v1.dat")
 RHCP_L_filename = Path("GNSS_RHCP_L_gain_db_i_v1.dat")
@@ -216,52 +171,6 @@ phy_ele_size = np.loadtxt(dem_path.joinpath(phy_ele_filename))
 # parameters at ddm timestamps
 
 
-def gps2utc(gpsweek, gpsseconds):
-    """GPS time to unix timestamp.
-
-    Parameters
-    ----------
-    gpsweek : int
-        GPS week number, i.e. 1866.
-    gpsseconds : int
-        Number of seconds since the beginning of week.
-
-    Returns
-    -------
-    numpy.float64
-        Unix timestamp (UTC time).
-    """
-    secs_in_week = 604800
-    secs = gpsweek * secs_in_week + gpsseconds
-
-    t_gps = astro_time(secs, format="gps")
-    t_utc = astro_time(t_gps, format="iso", scale="utc")
-
-    return t_utc.unix
-
-
-def utc2gps(timestamp):
-    """unix timestamp to GPS.
-
-    Parameters
-    ----------
-    numpy.float64
-        Unix timestamp (UTC time).
-
-    Returns
-    -------
-    gpsweek : int
-        GPS week number, i.e. 1866.
-    gpsseconds : int
-        Number of seconds since the beginning of week.
-    """
-    secs_in_week = 604800
-    t_utc = astro_time(timestamp, format="unix", scale="utc")
-    t_gps = astro_time(t_utc, format="gps")
-    gpsweek, gpsseconds = divmod(t_gps.value, secs_in_week)
-    return gpsweek, gpsseconds
-
-
 # make array (ddm_pvt_bias) of non_coherent_integrations divided by 2
 ddm_pvt_bias = non_coherent_integrations / 2
 # make array (pvt_utc) of gps to unix time (see above)
@@ -272,11 +181,6 @@ pvt_utc = np.array(
 ddm_utc = pvt_utc + ddm_pvt_bias
 # make arrays (gps_week, gps_tow) of ddm_utc to gps week/sec (inc. 1/2*integration time)
 gps_week, gps_tow = utc2gps(ddm_utc)
-
-
-def interp_ddm(x, y, x_ddm):
-    interp_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
-    return interp_func(x_ddm)
 
 
 rx_pos_x = interp_ddm(pvt_utc, rx_pos_x_pvt, ddm_utc)
@@ -370,23 +274,66 @@ per_bin_ant_version = "1"
 trans_id_unique = np.unique(transmitter_id)
 trans_id_unique = trans_id_unique[trans_id_unique > 0]
 
-# print(time_coverage_start_obj.day, time_coverage_end_obj.day)
-
-if time_coverage_start_obj.day == time_coverage_end_obj.day:
-    day_change_flag = 0
-else:
-    day_change_flag = 1
-    # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
-    change_idx = np.where(np.diff(np.floor(gps_tow / 86400)) > 0)[0][0] + 1
-
-for ngrx_channel in range(int(J / 2)):  # 20 channels, 10 satellites
-    pass
-
-c_path = Path().absolute().joinpath(Path("./lib/"))
-# GPS_GetSVInfo_filename = Path("mike_test.so")
-# GPS_GetSVInfo = CDLL(str(c_path.joinpath(GPS_GetSVInfo_filename)))
-# GPS_GetSVInfo.main()
+c_path = Path().absolute().joinpath(Path("./sxs/lib/"))
 GPS_GetSVInfo_filename = Path("GPS_GetSVInfo.so")
 GPS_GetSVInfo = CDLL(str(c_path.joinpath(GPS_GetSVInfo_filename)))
-GPS_GetSVInfo.main()
-print("done!!!")
+double_array_8 = c_double * 8
+
+
+def satellite_orbits(
+    gps_week,
+    gps_tow,
+    transmitter_id,
+    SV_PRN_LUT,
+    orbit_file,
+):
+    # sec=i
+    print("start")
+    for sec in range(len(gps_tow)):
+        # ngrx_channel=j, 20 channels, 10 satellites
+        for ngrx_channel in range(int(J / 2)):
+            prn1 = transmitter_id[sec][ngrx_channel]
+            if prn1:
+                # change this to later in code?
+                sv_num1 = np.where(SV_PRN_LUT == prn1)[0][0]
+                sat_pos = double_array_8()
+                print(bytes(str(orbit_file), "utf-8"))
+                GPS_GetSVInfo.main(
+                    c_uint(prn1),
+                    c_uint(int(gps_week[sec])),
+                    c_double(gps_tow[sec]),
+                    byref(sat_pos),
+                    c_char_p(bytes(str(orbit_file), "utf-8")),
+                )
+                print("done!!!")
+                print(*sat_pos)
+                print(sat_pos[3] * constants.c)
+                break
+        break
+    print("fin")
+
+
+### TODO revert the "!=" to "=="
+if time_coverage_start_obj.day != time_coverage_end_obj.day:
+    orbit_file1 = get_orbit_file(
+        gps_week,
+        gps_tow,
+        time_coverage_start_obj,
+        time_coverage_end_obj,
+    )
+    satellite_orbits(gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file1)
+else:
+    # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
+    change_idx = np.where(np.diff(np.floor(gps_tow / 86400)) > 0)[0][0] + 1
+    orbit_file1, orbit_file2 = get_orbit_file(
+        gps_week,
+        gps_tow,
+        time_coverage_start_obj,
+        time_coverage_end_obj,
+        change_idx=change_idx,
+    )
+    satellite_orbits(gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file1)
+    satellite_orbits(gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file2)
+
+
+exit()
