@@ -102,21 +102,21 @@ int GetSVInfo(unsigned int prn, unsigned int week, double TOW, double sat_pos[],
     return retval;    
 }
 
-int main()
+int main(unsigned int prn, unsigned int week, double TOW, double sat_pos[], char* infileXname)
 {
     //s_SV_Pos sat_pos;
     int retval = 0;
-    char infilename[200] = "/mnt/c/Users/mlav736/Documents/GitHub/SPOC-Rongowai-L1/sxs/lib/igr21384.sp3";  //sp3-d filename is defined here
+    //char infilename[200] = "/mnt/c/Users/mlav736/Documents/GitHub/SPOC-Rongowai-L1/sxs/lib/igr21384.sp3";  //sp3-d filename is defined here
 
-    unsigned int prn = 32;
-    unsigned int week = 2138;
-    double TOW = 345618.499262;
+    //unsigned int prn = 32;
+    //unsigned int week = 2138;
+    //double TOW = 345618.499262;
 
-    retval = GetSVInfo(prn, week, TOW, sat_pos, infilename);
+    retval = GetSVInfo(prn, week, TOW, sat_pos, infileXname);
 
     //printf(PosVel);
-    printf("\nGPS Position XYZ ECEF = %lf,%lf,%lf \n", sat_pos[0], sat_pos[1], sat_pos[2]);
-    printf("GPS Velocity XYZ ECEF = %lf,%lf,%lf \n", sat_pos[4], sat_pos[5], sat_pos[6]);
-    printf("GPS clock bias and drift = %12.11f,%12.11f \n", sat_pos[3], sat_pos[7]);
+    //printf("\nGPS Position XYZ ECEF = %lf,%lf,%lf \n", sat_pos[0], sat_pos[1], sat_pos[2]);
+    //printf("GPS Velocity XYZ ECEF = %lf,%lf,%lf \n", sat_pos[4], sat_pos[5], sat_pos[6]);
+    //printf("GPS clock bias and drift = %12.11f,%12.11f \n", sat_pos[3], sat_pos[7]);
     return 0;
 }
