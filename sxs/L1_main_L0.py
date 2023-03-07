@@ -3,13 +3,11 @@ import netCDF4 as nc
 import numpy as np
 import rasterio
 from scipy.interpolate import interpn
-from scipy import constants
 import pyproj
 from datetime import datetime
-from ctypes import CDLL, c_double, c_uint, c_char_p, byref
 from PIL import Image
 
-from gps_time import gps2utc, utc2gps
+from gps_functions import gps2utc, utc2gps, satellite_orbits
 from load_files import (
     load_netcdf,
     load_antenna_pattern,
@@ -203,6 +201,7 @@ rx_clk_drift_mps = interp_ddm(pvt_utc, rx_clk_drift_mps_pvt, ddm_utc)
 rx_clk = [rx_clk_bias_m, rx_clk_drift_mps]
 
 J = 20  # maximum NGRx capacity
+J_2 = int(J / 2)
 
 add_range_to_sp = np.full([*add_range_to_sp_pvt.shape], np.nan)
 for ngrx_channel in range(J):
@@ -274,54 +273,40 @@ per_bin_ant_version = "1"
 trans_id_unique = np.unique(transmitter_id)
 trans_id_unique = trans_id_unique[trans_id_unique > 0]
 
-c_path = Path().absolute().joinpath(Path("./sxs/lib/"))
-GPS_GetSVInfo_filename = Path("GPS_GetSVInfo.so")
-GPS_GetSVInfo = CDLL(str(c_path.joinpath(GPS_GetSVInfo_filename)))
-double_array_8 = c_double * 8
+tx_pos_x = np.full([*transmitter_id.shape], np.nan)
+tx_pos_y = np.full([*transmitter_id.shape], np.nan)
+tx_pos_z = np.full([*transmitter_id.shape], np.nan)
+tx_vel_x = np.full([*transmitter_id.shape], np.nan)
+tx_vel_y = np.full([*transmitter_id.shape], np.nan)
+tx_vel_z = np.full([*transmitter_id.shape], np.nan)
+tx_clk_bias = np.full([*transmitter_id.shape], np.nan)
+prn_code = np.full([*transmitter_id.shape], np.nan)
+sv_num = np.full([*transmitter_id.shape], np.nan)
+track_id = np.full([*transmitter_id.shape], np.nan)
+orbit_bundle = [
+    tx_pos_x,
+    tx_pos_y,
+    tx_pos_z,
+    tx_vel_x,
+    tx_vel_y,
+    tx_vel_z,
+    tx_clk_bias,
+    prn_code,
+    sv_num,
+    track_id,
+    trans_id_unique,
+]
 
-
-def satellite_orbits(
-    gps_week,
-    gps_tow,
-    transmitter_id,
-    SV_PRN_LUT,
-    orbit_file,
-):
-    # sec=i
-    print("start")
-    for sec in range(len(gps_tow)):
-        # ngrx_channel=j, 20 channels, 10 satellites
-        for ngrx_channel in range(int(J / 2)):
-            prn1 = transmitter_id[sec][ngrx_channel]
-            if prn1:
-                # change this to later in code?
-                sv_num1 = np.where(SV_PRN_LUT == prn1)[0][0]
-                sat_pos = double_array_8()
-                print(bytes(str(orbit_file), "utf-8"))
-                GPS_GetSVInfo.main(
-                    c_uint(prn1),
-                    c_uint(int(gps_week[sec])),
-                    c_double(gps_tow[sec]),
-                    byref(sat_pos),
-                    c_char_p(bytes(str(orbit_file), "utf-8")),
-                )
-                print("done!!!")
-                print(*sat_pos)
-                print(sat_pos[3] * constants.c)
-                break
-        break
-    print("fin")
-
-
-### TODO revert the "!=" to "=="
-if time_coverage_start_obj.day != time_coverage_end_obj.day:
+if time_coverage_start_obj.day == time_coverage_end_obj.day:
     orbit_file1 = get_orbit_file(
         gps_week,
         gps_tow,
         time_coverage_start_obj,
         time_coverage_end_obj,
     )
-    satellite_orbits(gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file1)
+    satellite_orbits(
+        J_2, gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file1, *orbit_bundle
+    )
 else:
     # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
     change_idx = np.where(np.diff(np.floor(gps_tow / 86400)) > 0)[0][0] + 1
@@ -332,8 +317,27 @@ else:
         time_coverage_end_obj,
         change_idx=change_idx,
     )
-    satellite_orbits(gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file1)
-    satellite_orbits(gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file2)
+    satellite_orbits(
+        J_2,
+        gps_week,
+        gps_tow,
+        transmitter_id,
+        SV_PRN_LUT,
+        orbit_file1,
+        *orbit_bundle,
+        end=change_idx,
+    )
+    satellite_orbits(
+        J_2,
+        gps_week,
+        gps_tow,
+        transmitter_id,
+        SV_PRN_LUT,
+        orbit_file2,
+        *orbit_bundle,
+        start=change_idx,
+    )
 
-
-exit()
+### ----------------------  Part 3: L1a calibration
+# this part converts from raw counts to signal power in watts and complete
+# L1a calibration
