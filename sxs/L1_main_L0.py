@@ -2,11 +2,12 @@ from pathlib import Path
 import netCDF4 as nc
 import numpy as np
 import rasterio
-from scipy.interpolate import interpn
+from scipy.interpolate import interp1d, interpn
 import pyproj
 from datetime import datetime
 from PIL import Image
 
+from cal_functions import L1a_counts2watts
 from gps_functions import gps2utc, utc2gps, satellite_orbits
 from load_files import (
     load_netcdf,
@@ -50,7 +51,7 @@ rx_clk_bias_m_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_clock_bias_m"]
 rx_clk_drift_mps_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_clock_drift_mps"])
 
 #
-# Some processing required here to fix sporadic "zero" values??
+# TODO: Some processing required here to fix sporadic "zero" values??
 #
 
 ### ddm-related variables
@@ -80,7 +81,7 @@ add_range_to_sp_pvt = load_netcdf(L0_dataset["/science/ddm/additional_range_to_S
 
 # print(len(pvt_gps_week) - len(transmitter_id))
 #
-# Additional processing if ddm- and rx- related varaibles aren't the same length
+# TODO: Additional processing if ddm- and rx- related varaibles aren't the same length
 #
 
 ### temperatures from engineering data
@@ -125,7 +126,7 @@ lcv_path = Path().absolute().joinpath(Path("./dat/lcv/"))
 lcv_filename = Path("lcv.png")
 lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 
-# -------------- This isn't actually used??
+# TODO -------------- This isn't actually used??
 # process inland water mask
 # pek_path = Path().absolute().joinpath(Path("./dat/pek/"))
 # pek_filename_1 = Path("occurrence_160E_40S.tif")
@@ -212,7 +213,7 @@ for ngrx_channel in range(J):
 ant_temp_zenith = interp_ddm(eng_timestamp, zenith_ant_temp_eng, ddm_utc)
 ant_temp_nadir = interp_ddm(eng_timestamp, nadir_ant_temp_eng, ddm_utc)
 
-# function is depreciated,see following url
+# TODO function is depreciated,see following url
 # https://pyproj4.github.io/pyproj/stable/gotchas.html#upgrading-to-pyproj-2-from-pyproj-1
 ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
 lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
@@ -341,3 +342,121 @@ else:
 ### ----------------------  Part 3: L1a calibration
 # this part converts from raw counts to signal power in watts and complete
 # L1a calibration
+
+# offset delay rows to derive noise floor
+offset = 4
+# map rf_source to ANZ_port
+ANZ_port = {0: 0, 4: 1, 8: 2}
+binning_thres_db = [50.5, 49.6, 50.4]
+
+L1a_cal_1dinterp = {}
+for i in range(3):
+    L1a_cal_1dinterp[i] = interp1d(
+        L1a_cal_ddm_counts_db[i, :],
+        L1a_cal_ddm_power_dbm[i, :],
+        kind="cubic",
+        fill_value="extrapolate",
+    )
+
+ddm_power_counts = np.full([*raw_counts.shape], np.nan)
+power_analog = np.full([*raw_counts.shape], np.nan)
+ddm_ant = np.full([*transmitter_id.shape], np.nan)
+ddm_noise_counts = np.full([*transmitter_id.shape], np.nan)
+ddm_noise_watts = np.full([*transmitter_id.shape], np.nan)
+peak_ddm_counts = np.full([*transmitter_id.shape], np.nan)
+peak_ddm_watts = np.full([*transmitter_id.shape], np.nan)
+peak_delay_bin = np.full([*transmitter_id.shape], np.nan)
+
+
+# TODO - what to do about partial DDMs?
+for sec in range(len(std_dev_rf1)):
+    std_dev1 = [std_dev_rf1[sec], std_dev_rf2[sec], std_dev_rf3[sec]]
+    for ngrx_channel in range(J):
+        prn_code1 = prn_code[sec, ngrx_channel]
+        raw_counts1 = raw_counts[sec, ngrx_channel, :, :]
+        # solve only when presenting a valid PRN and DDM counts
+        # if not nan, array corner not zero, and array corner not equal centre
+        # TODO: decide if better way to test this....
+        # TODO: what to do with half arrays?
+        if not np.isnan(prn_code1) and (raw_counts1[1, 1] != 0):
+            if raw_counts1[0, 0] != raw_counts1[20, 2]:
+
+                rf_source1 = rf_source[sec, ngrx_channel]
+                ddm_power_counts1 = raw_counts1 * first_scale_factor[sec, ngrx_channel]
+
+                ddm_power_watts1 = L1a_counts2watts(
+                    ddm_power_counts1,
+                    std_dev1,
+                    ANZ_port,
+                    rf_source1,
+                    L1a_cal_1dinterp,
+                    binning_thres_db,
+                )
+                # TODO
+                # could ddm_noise_watts1 simply be replacd by np.mean(ddm_power_watts1[-offset - 1 :, :])?
+                # close but not identical, but is that an issue of interpolating on 1 value vs
+                # average over several interpolated?
+                ddm_noise_counts1 = np.mean(ddm_power_counts1[-offset - 1 :, :])
+                ddm_noise_watts1 = L1a_counts2watts(
+                    ddm_noise_counts1,
+                    std_dev1,
+                    ANZ_port,
+                    rf_source1,
+                    L1a_cal_1dinterp,
+                    binning_thres_db,
+                )
+
+                peak_ddm_counts1 = np.max(ddm_power_counts1)
+                # TODO - keep as 0-based indices here for consistency? [1-based in matlab]
+                peak_delay_bin1 = np.where(ddm_power_counts1 == peak_ddm_counts1)[0][0]
+                peak_ddm_watts1 = np.max(ddm_power_watts1)
+
+                ddm_power_counts[sec][ngrx_channel] = ddm_power_counts1
+                power_analog[sec][ngrx_channel] = ddm_power_watts1
+                # this is 1-based
+                ddm_ant[sec][ngrx_channel] = ANZ_port[rf_source1] + 1
+                ddm_noise_counts[sec][ngrx_channel] = ddm_noise_counts1
+                ddm_noise_watts[sec][ngrx_channel] = ddm_noise_watts1
+                peak_ddm_counts[sec][ngrx_channel] = peak_ddm_counts1
+                peak_ddm_watts[sec][ngrx_channel] = peak_ddm_watts1
+                # this is 0-based
+                peak_delay_bin[sec][ngrx_channel] = peak_delay_bin1
+
+
+# derive noise floor, SNR and instrument gain
+for sec in range(len(std_dev_rf1)):
+
+    noise_counts_LHCP1 = ddm_noise_counts[sec][:J_2]
+    noise_watts_LHCP1 = ddm_noise_watts[sec][:J_2]
+    peak_delay_bin_LHCP1 = peak_delay_bin[sec][:J_2]
+
+    noise_counts_RHCP1 = ddm_noise_counts[sec][J_2:]
+    noise_watts_RHCP1 = ddm_noise_watts[sec][J_2:]
+    peak_delay_bin_RHCP1 = peak_delay_bin[sec][J_2:]
+
+    # TODO why less than 31?
+    noise_index_LHCP = np.where(
+        (0 < peak_delay_bin_LHCP1) | (peak_delay_bin_LHCP1 < 31)
+    )
+    noise_index_RHCP = np.where(
+        (0 < peak_delay_bin_RHCP1) | (peak_delay_bin_RHCP1 < 31)
+    )
+
+    # TODO why just check LH validity? why not RH checks too?
+    if noise_index_LHCP:
+        avg_noise_counts_LHCP1 = np.mean(noise_counts_LHCP1[noise_index_LHCP])
+        avg_noise_watts_LHCP1 = np.mean(noise_watts_LHCP1[noise_index_LHCP])
+        avg_noise_counts_RHCP1 = np.mean(noise_counts_RHCP1[noise_index_RHCP])
+        avg_noise_watts_RHCP1 = np.mean(noise_watts_RHCP1[noise_index_RHCP])
+
+    elif any(np.isfinite(noise_counts_LHCP1)):
+        # TODO it looks like the Matlab code sets the noise floors to the last
+        # calculated values for sec,ngrx_channel... is this the transition issue cause?
+        pass
+    else:
+        # TODO surely something here?
+        pass
+
+    # sys.exit()
+    for ngrx_channel in range(J):
+        prn_code1 = prn_code[sec, ngrx_channel]
