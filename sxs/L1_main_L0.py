@@ -1,3 +1,7 @@
+# mike.laverick@auckland.ac.nz
+# L1_main_L0.py
+# Initial draft L1 script
+
 from pathlib import Path
 import netCDF4 as nc
 import numpy as np
@@ -17,20 +21,19 @@ from load_files import (
     load_dat_file_grid,
 )
 
+# Required to load the land cover mask file
 Image.MAX_IMAGE_PIXELS = None
 
 
 ### ---------------------- Prelaunch 1: Load L0 data
 
-
+# specify input L0 netcdf file
 raw_data_path = Path().absolute().joinpath(Path("./dat/raw/"))
 L0_filename = Path("20221103-121416_NZNV-NZCH.nc")
-# L0_filenames = glob.glob("*.nc")
-
 L0_dataset = nc.Dataset(raw_data_path.joinpath(L0_filename))
 
 
-### rx -related variables
+# load in rx-related variables
 # PVT GPS week and sec
 pvt_gps_week = load_netcdf(L0_dataset["/science/GPS_week_of_SC_attitude"])
 pvt_gps_sec = load_netcdf(L0_dataset["/science/GPS_second_of_SC_attitude"])
@@ -42,7 +45,7 @@ rx_pos_z_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_position_z_ecef_m"]
 rx_vel_x_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_velocity_x_ecef_mps"])
 rx_vel_y_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_velocity_y_ecef_mps"])
 rx_vel_z_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_velocity_z_ecef_mps"])
-# rx attitude, deg
+# rx attitude, deg | TODO this is actually radians and will be updated
 rx_pitch_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_attitude_pitch_deg"])
 rx_roll_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_attitude_roll_deg"])
 rx_yaw_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_attitude_yaw_deg"])
@@ -50,18 +53,17 @@ rx_yaw_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_attitude_yaw_deg"])
 rx_clk_bias_m_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_clock_bias_m"])
 rx_clk_drift_mps_pvt = load_netcdf(L0_dataset["/geometry/receiver/rx_clock_drift_mps"])
 
-#
-# TODO: Some processing required here to fix sporadic "zero" values??
-#
+# TODO: Some processing required here to fix leading/trailing/sporadic "zero" values?
 
-### ddm-related variables
+# load in ddm-related variables
 # tx ID/satellite PRN
 transmitter_id = load_netcdf(L0_dataset["/science/ddm/transmitter_id"])
 # raw counts and ddm parameters
 first_scale_factor = load_netcdf(L0_dataset["/science/ddm/first_scale_factor"])
-raw_counts = load_netcdf(L0_dataset["/science/ddm/counts"])  # raw counts, uncalibrated
-zenith_i2q2 = load_netcdf(L0_dataset["/science/ddm/zenith_i2_plus_q2"])  # zenith counts
-rf_source = load_netcdf(L0_dataset["/science/ddm/RF_source"])  # RF source
+# raw counts, uncalibrated
+raw_counts = load_netcdf(L0_dataset["/science/ddm/counts"])
+zenith_i2q2 = load_netcdf(L0_dataset["/science/ddm/zenith_i2_plus_q2"])
+rf_source = load_netcdf(L0_dataset["/science/ddm/RF_source"])
 # binning standard deviation
 std_dev_rf1 = load_netcdf(L0_dataset["/science/ddm/RF1_zenith_RHCP_std_dev"])
 std_dev_rf2 = load_netcdf(L0_dataset["/science/ddm/RF2_nadir_LHCP_std_dev"])
@@ -79,12 +81,10 @@ non_coherent_integrations = (
 # NGRx estimate additional delay path
 add_range_to_sp_pvt = load_netcdf(L0_dataset["/science/ddm/additional_range_to_SP"])
 
-# print(len(pvt_gps_week) - len(transmitter_id))
 #
 # TODO: Additional processing if ddm- and rx- related varaibles aren't the same length
 #
 
-### temperatures from engineering data
 # antenna temperatures and engineering timestamp
 eng_timestamp = load_netcdf(L0_dataset["/eng/packet_creation_time"])
 zenith_ant_temp_eng = load_netcdf(L0_dataset["/eng/zenith_ant_temp"])
@@ -120,8 +120,7 @@ landmask_path = Path().absolute().joinpath(Path("./dat/cst/"))
 landmask_filename = Path("dist_to_coast_nz_v1.dat")
 landmask_nz = load_dat_file_grid(landmask_path.joinpath(landmask_filename))
 
-
-# process landcover mask
+# load landcover mask
 lcv_path = Path().absolute().joinpath(Path("./dat/lcv/"))
 lcv_filename = Path("lcv.png")
 lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
@@ -181,38 +180,40 @@ ddm_utc = pvt_utc + ddm_pvt_bias
 # make arrays (gps_week, gps_tow) of ddm_utc to gps week/sec (inc. 1/2*integration time)
 gps_week, gps_tow = utc2gps(ddm_utc)
 
-
+# interpolate rx positions onto new time grid
 rx_pos_x = interp_ddm(pvt_utc, rx_pos_x_pvt, ddm_utc)
 rx_pos_y = interp_ddm(pvt_utc, rx_pos_y_pvt, ddm_utc)
 rx_pos_z = interp_ddm(pvt_utc, rx_pos_z_pvt, ddm_utc)
 rx_pos_xyz = [rx_pos_x, rx_pos_y, rx_pos_z]
-
+# interpolate rx velocities onto new time grid
 rx_vel_x = interp_ddm(pvt_utc, rx_vel_x_pvt, ddm_utc)
 rx_vel_y = interp_ddm(pvt_utc, rx_vel_y_pvt, ddm_utc)
 rx_vel_z = interp_ddm(pvt_utc, rx_vel_z_pvt, ddm_utc)
 rx_vel_xyz = [rx_vel_x, rx_vel_y, rx_vel_z]
-
+# interpolate rx roll/pitch/yaw onto new time grid
 rx_roll = interp_ddm(pvt_utc, rx_roll_pvt, ddm_utc)
 rx_pitch = interp_ddm(pvt_utc, rx_pitch_pvt, ddm_utc)
 rx_yaw = interp_ddm(pvt_utc, rx_yaw_pvt, ddm_utc)
 rx_attitude = [rx_roll, rx_pitch, rx_yaw]
-
+# interpolate bias+drift onto new time grid
 rx_clk_bias_m = interp_ddm(pvt_utc, rx_clk_bias_m_pvt, ddm_utc)
 rx_clk_drift_mps = interp_ddm(pvt_utc, rx_clk_drift_mps_pvt, ddm_utc)
-rx_clk = [rx_clk_bias_m, rx_clk_drift_mps]
 
-J = 20  # maximum NGRx capacity
+# define maximum NGRx signal capacity, and half
+J = 20
 J_2 = int(J / 2)
 
+# interpolate "additional_range_to_SP" to new time grid
 add_range_to_sp = np.full([*add_range_to_sp_pvt.shape], np.nan)
 for ngrx_channel in range(J):
     add_range_to_sp[:, ngrx_channel] = interp_ddm(
         pvt_utc, add_range_to_sp_pvt[:, ngrx_channel], ddm_utc
     )
-
+# interpolate temperatures onto new time grid
 ant_temp_zenith = interp_ddm(eng_timestamp, zenith_ant_temp_eng, ddm_utc)
 ant_temp_nadir = interp_ddm(eng_timestamp, nadir_ant_temp_eng, ddm_utc)
 
+# define projections and transform
 # TODO function is depreciated,see following url
 # https://pyproj4.github.io/pyproj/stable/gotchas.html#upgrading-to-pyproj-2-from-pyproj-1
 ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
@@ -220,6 +221,7 @@ lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
 lon, lat, alt = pyproj.transform(ecef, lla, *rx_pos_xyz, radians=False)
 rx_pos_lla = [lat, lon, alt]
 
+# determine specular point "over land" flag from landmask
 status_flags_one_hz = interpn(
     points=(landmask_nz["lon"], landmask_nz["lat"]),
     values=landmask_nz["ele"],
@@ -229,6 +231,7 @@ status_flags_one_hz = interpn(
 status_flags_one_hz[status_flags_one_hz > 0] = 5
 status_flags_one_hz[status_flags_one_hz <= 0] = 4
 
+# determine time coverage
 time_coverage_start_obj = datetime.utcfromtimestamp(ddm_utc[0])
 time_coverage_start = time_coverage_start_obj.strftime("%Y-%m-%d %H:%M:%S")
 time_coverage_end_obj = datetime.utcfromtimestamp(ddm_utc[-1])
@@ -238,14 +241,13 @@ hours, remainder = divmod((ddm_utc[-1] - ddm_utc[0] + 1), 3600)
 minutes, seconds = divmod(remainder, 60)
 time_coverage_duration = f"P0DT{int(hours)}H{int(minutes)}M{int(seconds)}S"
 
+# specify L1 netcdf information and write algorithm + LUT versions
 aircraft_reg = "ZK-NFA"  # default value
 ddm_source = 2  # 1 = GPS signal simulator, 2 = aircraft
 ddm_time_type_selector = 1  # 1 = middle of DDM sampling period
 delay_resolution = 0.25  # unit in chips
 dopp_resolution = 500  # unit in Hz
 dem_source = "SRTM30"
-
-# write algorithm and LUT versions
 l1_algorithm_version = "1.1"
 l1_data_version = "1"
 l1a_sig_LUT_version = "1"
@@ -262,18 +264,18 @@ per_bin_ant_version = "1"
 
 # write timestamps and ac-related variables
 # 0-indexed sample and DDM
-# Skipping these right now to avoid dupication of variables
+# TODO Skipping these right now to avoid dupication of variables
 
 
 ### ---------------------- Part 2: Derive TX related variables
 # This part derives TX positions and velocities, maps between PRN and SVN,
 # and gets track ID
-# This part is to deal with the new SP3 naming policy, for old SP3 naming
-# policy (Nov 2022 and before), refer to the next section (default commented)
 
+# determine unique satellite transponder IDs
 trans_id_unique = np.unique(transmitter_id)
 trans_id_unique = trans_id_unique[trans_id_unique > 0]
 
+# create data arrays for C++ code to populate
 tx_pos_x = np.full([*transmitter_id.shape], np.nan)
 tx_pos_y = np.full([*transmitter_id.shape], np.nan)
 tx_pos_z = np.full([*transmitter_id.shape], np.nan)
@@ -298,19 +300,24 @@ orbit_bundle = [
     trans_id_unique,
 ]
 
+# determine whether flight spans a UTC day
 if time_coverage_start_obj.day == time_coverage_end_obj.day:
+    # determine single orbit file of that day
     orbit_file1 = get_orbit_file(
         gps_week,
         gps_tow,
         time_coverage_start_obj,
         time_coverage_end_obj,
     )
+    # calculate satellite orbits, data assigned to orbit_bundle arrays
     satellite_orbits(
         J_2, gps_week, gps_tow, transmitter_id, SV_PRN_LUT, orbit_file1, *orbit_bundle
     )
 else:
+    # find idx of day change in timestamps
     # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
     change_idx = np.where(np.diff(np.floor(gps_tow / 86400)) > 0)[0][0] + 1
+    # determine day_N and day_N+1 orbit files to use
     orbit_file1, orbit_file2 = get_orbit_file(
         gps_week,
         gps_tow,
@@ -318,6 +325,8 @@ else:
         time_coverage_end_obj,
         change_idx=change_idx,
     )
+    # calculate first chunk of specular points using 1st orbit file
+    # data assigned to orbit_bundle arrays
     satellite_orbits(
         J_2,
         gps_week,
@@ -328,6 +337,8 @@ else:
         *orbit_bundle,
         end=change_idx,
     )
+    # calculate last chunk of specular points using 2nd orbit file
+    # data assigned to orbit_bundle arrays
     satellite_orbits(
         J_2,
         gps_week,
@@ -349,6 +360,7 @@ offset = 4
 ANZ_port = {0: 0, 4: 1, 8: 2}
 binning_thres_db = [50.5, 49.6, 50.4]
 
+# create the interpolation functions for the 3 ports
 L1a_cal_1dinterp = {}
 for i in range(3):
     L1a_cal_1dinterp[i] = interp1d(
@@ -358,6 +370,7 @@ for i in range(3):
         fill_value="extrapolate",
     )
 
+# create data arrays to hold DDM power/count arrays
 ddm_power_counts = np.full([*raw_counts.shape], np.nan)
 power_analog = np.full([*raw_counts.shape], np.nan)
 ddm_ant = np.full([*transmitter_id.shape], np.nan)
@@ -369,9 +382,13 @@ peak_delay_bin = np.full([*transmitter_id.shape], np.nan)
 
 
 # TODO - what to do about partial DDMs?
+# iterate over seconds of flight
 for sec in range(len(std_dev_rf1)):
+    # bundle std_X[i] values for ease
     std_dev1 = [std_dev_rf1[sec], std_dev_rf2[sec], std_dev_rf3[sec]]
+    # iterate over the 20 NGRX_channels
     for ngrx_channel in range(J):
+        # assign local variables for PRN and DDM counts
         prn_code1 = prn_code[sec, ngrx_channel]
         raw_counts1 = raw_counts[sec, ngrx_channel, :, :]
         # solve only when presenting a valid PRN and DDM counts
@@ -381,9 +398,9 @@ for sec in range(len(std_dev_rf1)):
         if not np.isnan(prn_code1) and (raw_counts1[1, 1] != 0):
             if raw_counts1[0, 0] != raw_counts1[20, 2]:
 
+                # scale raw counts and convert from counts to watts
                 rf_source1 = rf_source[sec, ngrx_channel]
                 ddm_power_counts1 = raw_counts1 * first_scale_factor[sec, ngrx_channel]
-
                 ddm_power_watts1 = L1a_counts2watts(
                     ddm_power_counts1,
                     std_dev1,
@@ -392,71 +409,23 @@ for sec in range(len(std_dev_rf1)):
                     L1a_cal_1dinterp,
                     binning_thres_db,
                 )
-                # TODO
-                # could ddm_noise_watts1 simply be replacd by np.mean(ddm_power_watts1[-offset - 1 :, :])?
-                # close but not identical, but is that an issue of interpolating on 1 value vs
-                # average over several interpolated?
+                # determine noise counts from offset value
                 ddm_noise_counts1 = np.mean(ddm_power_counts1[-offset - 1 :, :])
-                ddm_noise_watts1 = L1a_counts2watts(
-                    ddm_noise_counts1,
-                    std_dev1,
-                    ANZ_port,
-                    rf_source1,
-                    L1a_cal_1dinterp,
-                    binning_thres_db,
-                )
-
+                # find peak counts/watts/delay from DDM data
                 peak_ddm_counts1 = np.max(ddm_power_counts1)
-                # TODO - keep as 0-based indices here for consistency? [1-based in matlab]
+                # TODO - keep as 0-based indices here for consistency? [1-based in matlab and L1 file]
                 peak_delay_bin1 = np.where(ddm_power_counts1 == peak_ddm_counts1)[0][0]
                 peak_ddm_watts1 = np.max(ddm_power_watts1)
-
                 ddm_power_counts[sec][ngrx_channel] = ddm_power_counts1
                 power_analog[sec][ngrx_channel] = ddm_power_watts1
                 # this is 1-based
                 ddm_ant[sec][ngrx_channel] = ANZ_port[rf_source1] + 1
                 ddm_noise_counts[sec][ngrx_channel] = ddm_noise_counts1
-                ddm_noise_watts[sec][ngrx_channel] = ddm_noise_watts1
+                # ddm_noise_watts[sec][ngrx_channel] = ddm_noise_watts1
                 peak_ddm_counts[sec][ngrx_channel] = peak_ddm_counts1
                 peak_ddm_watts[sec][ngrx_channel] = peak_ddm_watts1
                 # this is 0-based
                 peak_delay_bin[sec][ngrx_channel] = peak_delay_bin1
 
-
-# derive noise floor, SNR and instrument gain
-for sec in range(len(std_dev_rf1)):
-
-    noise_counts_LHCP1 = ddm_noise_counts[sec][:J_2]
-    noise_watts_LHCP1 = ddm_noise_watts[sec][:J_2]
-    peak_delay_bin_LHCP1 = peak_delay_bin[sec][:J_2]
-
-    noise_counts_RHCP1 = ddm_noise_counts[sec][J_2:]
-    noise_watts_RHCP1 = ddm_noise_watts[sec][J_2:]
-    peak_delay_bin_RHCP1 = peak_delay_bin[sec][J_2:]
-
-    # TODO why less than 31?
-    noise_index_LHCP = np.where(
-        (0 < peak_delay_bin_LHCP1) | (peak_delay_bin_LHCP1 < 31)
-    )
-    noise_index_RHCP = np.where(
-        (0 < peak_delay_bin_RHCP1) | (peak_delay_bin_RHCP1 < 31)
-    )
-
-    # TODO why just check LH validity? why not RH checks too?
-    if noise_index_LHCP:
-        avg_noise_counts_LHCP1 = np.mean(noise_counts_LHCP1[noise_index_LHCP])
-        avg_noise_watts_LHCP1 = np.mean(noise_watts_LHCP1[noise_index_LHCP])
-        avg_noise_counts_RHCP1 = np.mean(noise_counts_RHCP1[noise_index_RHCP])
-        avg_noise_watts_RHCP1 = np.mean(noise_watts_RHCP1[noise_index_RHCP])
-
-    elif any(np.isfinite(noise_counts_LHCP1)):
-        # TODO it looks like the Matlab code sets the noise floors to the last
-        # calculated values for sec,ngrx_channel... is this the transition issue cause?
-        pass
-    else:
-        # TODO surely something here?
-        pass
-
-    # sys.exit()
-    for ngrx_channel in range(J):
-        prn_code1 = prn_code[sec, ngrx_channel]
+print("done")
+print("fin")
