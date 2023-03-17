@@ -6,12 +6,12 @@ from pathlib import Path
 import netCDF4 as nc
 import numpy as np
 import rasterio
-from scipy.interpolate import interp1d, interpn
+from scipy.interpolate import interpn
 import pyproj
 from datetime import datetime
 from PIL import Image
 
-from cal_functions import L1a_counts2watts
+from cal_functions import ddm_calibration
 from gps_functions import gps2utc, utc2gps, satellite_orbits
 from load_files import (
     load_netcdf,
@@ -93,12 +93,6 @@ nadir_ant_temp_eng = load_netcdf(L0_dataset["/eng/nadir_ant_temp"])
 
 ### ---------------------- Prelaunch 2 - define external data paths and filenames
 
-# load L1a calibration tables
-L1a_path = Path().absolute().joinpath(Path("./dat/L1a_cal/"))
-L1a_cal_ddm_counts_db_filename = Path("L1A_cal_ddm_counts_dB.dat")
-L1a_cal_ddm_power_dbm_filename = Path("L1A_cal_ddm_power_dBm.dat")
-L1a_cal_ddm_counts_db = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_counts_db_filename))
-L1a_cal_ddm_power_dbm = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_power_dbm_filename))
 
 # load SRTM_30 DEM
 dem_path = Path().absolute().joinpath(Path("./dat/dem/"))
@@ -354,21 +348,6 @@ else:
 # this part converts from raw counts to signal power in watts and complete
 # L1a calibration
 
-# offset delay rows to derive noise floor
-offset = 4
-# map rf_source to ANZ_port
-ANZ_port = {0: 0, 4: 1, 8: 2}
-binning_thres_db = [50.5, 49.6, 50.4]
-
-# create the interpolation functions for the 3 ports
-L1a_cal_1dinterp = {}
-for i in range(3):
-    L1a_cal_1dinterp[i] = interp1d(
-        L1a_cal_ddm_counts_db[i, :],
-        L1a_cal_ddm_power_dbm[i, :],
-        kind="cubic",
-        fill_value="extrapolate",
-    )
 
 # create data arrays to hold DDM power/count arrays
 ddm_power_counts = np.full([*raw_counts.shape], np.nan)
@@ -380,52 +359,62 @@ peak_ddm_counts = np.full([*transmitter_id.shape], np.nan)
 peak_ddm_watts = np.full([*transmitter_id.shape], np.nan)
 peak_delay_bin = np.full([*transmitter_id.shape], np.nan)
 
+# invoke calibration function which populates above arrays
+ddm_calibration(
+    std_dev_rf1,
+    std_dev_rf2,
+    std_dev_rf3,
+    J,
+    prn_code,
+    raw_counts,
+    rf_source,
+    first_scale_factor,
+    ddm_power_counts,
+    power_analog,
+    ddm_ant,
+    ddm_noise_counts,
+    peak_ddm_counts,
+    peak_ddm_watts,
+    peak_delay_bin,
+)
 
-# TODO - what to do about partial DDMs?
-# iterate over seconds of flight
-for sec in range(len(std_dev_rf1)):
-    # bundle std_X[i] values for ease
-    std_dev1 = [std_dev_rf1[sec], std_dev_rf2[sec], std_dev_rf3[sec]]
-    # iterate over the 20 NGRX_channels
-    for ngrx_channel in range(J):
-        # assign local variables for PRN and DDM counts
-        prn_code1 = prn_code[sec, ngrx_channel]
-        raw_counts1 = raw_counts[sec, ngrx_channel, :, :]
-        # solve only when presenting a valid PRN and DDM counts
-        # if not nan, array corner not zero, and array corner not equal centre
-        # TODO: decide if better way to test this....
-        # TODO: what to do with half arrays?
-        if not np.isnan(prn_code1) and (raw_counts1[1, 1] != 0):
-            if raw_counts1[0, 0] != raw_counts1[20, 2]:
 
-                # scale raw counts and convert from counts to watts
-                rf_source1 = rf_source[sec, ngrx_channel]
-                ddm_power_counts1 = raw_counts1 * first_scale_factor[sec, ngrx_channel]
-                ddm_power_watts1 = L1a_counts2watts(
-                    ddm_power_counts1,
-                    std_dev1,
-                    ANZ_port,
-                    rf_source1,
-                    L1a_cal_1dinterp,
-                    binning_thres_db,
-                )
-                # determine noise counts from offset value
-                ddm_noise_counts1 = np.mean(ddm_power_counts1[-offset - 1 :, :])
-                # find peak counts/watts/delay from DDM data
-                peak_ddm_counts1 = np.max(ddm_power_counts1)
-                # TODO - keep as 0-based indices here for consistency? [1-based in matlab and L1 file]
-                peak_delay_bin1 = np.where(ddm_power_counts1 == peak_ddm_counts1)[0][0]
-                peak_ddm_watts1 = np.max(ddm_power_watts1)
-                ddm_power_counts[sec][ngrx_channel] = ddm_power_counts1
-                power_analog[sec][ngrx_channel] = ddm_power_watts1
-                # this is 1-based
-                ddm_ant[sec][ngrx_channel] = ANZ_port[rf_source1] + 1
-                ddm_noise_counts[sec][ngrx_channel] = ddm_noise_counts1
-                # ddm_noise_watts[sec][ngrx_channel] = ddm_noise_watts1
-                peak_ddm_counts[sec][ngrx_channel] = peak_ddm_counts1
-                peak_ddm_watts[sec][ngrx_channel] = peak_ddm_watts1
-                # this is 0-based
-                peak_delay_bin[sec][ngrx_channel] = peak_delay_bin1
+# --------------------- Part 4A: SP solver and geometries
+# initialise a huge amount of empty arrays
 
-print("done")
-print("fin")
+sx_pos_x = np.full([*transmitter_id.shape], np.nan)
+sx_pos_y = np.full([*transmitter_id.shape], np.nan)
+sx_pos_z = np.full([*transmitter_id.shape], np.nan)
+
+sx_lat = np.full([*transmitter_id.shape], np.nan)
+sx_lon = np.full([*transmitter_id.shape], np.nan)
+sx_alt = np.full([*transmitter_id.shape], np.nan)
+
+sx_vel_x = np.full([*transmitter_id.shape], np.nan)
+sx_vel_y = np.full([*transmitter_id.shape], np.nan)
+sx_vel_z = np.full([*transmitter_id.shape], np.nan)
+
+sx_inc_angle = np.full([*transmitter_id.shape], np.nan)
+sx_d_snell_angle = np.full([*transmitter_id.shape], np.nan)
+dist_to_coast_km = np.full([*transmitter_id.shape], np.nan)
+surface_type = np.full([*transmitter_id.shape], np.nan)
+
+LOS_flag = np.full([*transmitter_id.shape], np.nan)
+
+tx_to_sp_range = np.full([*transmitter_id.shape], np.nan)
+rx_to_sp_range = np.full([*transmitter_id.shape], np.nan)
+
+gps_boresight = np.full([*transmitter_id.shape], np.nan)
+
+sx_theta_body = np.full([*transmitter_id.shape], np.nan)
+sx_az_body = np.full([*transmitter_id.shape], np.nan)
+
+sx_theta_enu = np.full([*transmitter_id.shape], np.nan)
+sx_az_enu = np.full([*transmitter_id.shape], np.nan)
+
+gps_tx_power_db_w = np.full([*transmitter_id.shape], np.nan)
+gps_ant_gain_db_i = np.full([*transmitter_id.shape], np.nan)
+static_gps_eirp = np.full([*transmitter_id.shape], np.nan)
+
+sx_rx_gain_copol = np.full([*transmitter_id.shape], np.nan)
+sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
