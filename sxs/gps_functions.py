@@ -138,32 +138,33 @@ def satellite_orbits(
         for ngrx_channel in range(J_2):
             prn1 = transmitter_id[sec][ngrx_channel]
             # check if satellite is being tracked in channel
-            if prn1:
-                # determine satellite designation for C++ code, initialise result array
-                sv_num1 = SV_PRN_LUT[np.where(SV_PRN_LUT == prn1)[0][0]][1]
-                sat_pos = double_array_8()
-                # call C++ function to calculate satellite info
-                GPS_GetSVInfo.main(
-                    c_uint(prn1),
-                    c_uint(int(gps_week[sec])),
-                    c_double(gps_tow[sec]),
-                    byref(sat_pos),
-                    c_char_p(bytes(str(orbit_file), "utf-8")),
-                )
-                # assign C++ values to corresponding array indexes,
-                # duplicating for left/right mirroring in DDMs
-                posx, posy, posz, bias, velx, vely, velz, _ = sat_pos
-                tx_pos_x[sec][ngrx_channel] = tx_pos_x[sec][ngrx_channel + J_2] = posx
-                tx_pos_y[sec][ngrx_channel] = tx_pos_y[sec][ngrx_channel + J_2] = posy
-                tx_pos_z[sec][ngrx_channel] = tx_pos_z[sec][ngrx_channel + J_2] = posz
-                tx_vel_x[sec][ngrx_channel] = tx_vel_x[sec][ngrx_channel + J_2] = velx
-                tx_vel_y[sec][ngrx_channel] = tx_vel_y[sec][ngrx_channel + J_2] = vely
-                tx_vel_z[sec][ngrx_channel] = tx_vel_z[sec][ngrx_channel + J_2] = velz
-                tx_clk_bias[sec][ngrx_channel] = tx_clk_bias[sec][
-                    ngrx_channel + J_2
-                ] = (bias * constants.c)
-                prn_code[sec][ngrx_channel] = prn_code[sec][ngrx_channel + J_2] = prn1
-                sv_num[sec][ngrx_channel] = sv_num[sec][ngrx_channel + J_2] = sv_num1
-                track_id[sec][ngrx_channel] = track_id[sec][ngrx_channel + J_2] = (
-                    np.where(trans_id_unique == prn1)[0][0] + 1
-                )
+            if not prn1:
+                continue
+            # determine satellite designation for C++ code, initialise result array
+            sv_num1 = SV_PRN_LUT[np.where(SV_PRN_LUT == prn1)[0][0]][1]
+            sat_pos = double_array_8()
+            # call C++ function to calculate satellite info
+            GPS_GetSVInfo.main(
+                c_uint(prn1),
+                c_uint(int(gps_week[sec])),
+                c_double(gps_tow[sec]),
+                byref(sat_pos),
+                c_char_p(bytes(str(orbit_file), "utf-8")),
+            )
+            # assign C++ values to corresponding array indexes,
+            # duplicating for left/right mirroring in DDMs
+            posx, posy, posz, bias, velx, vely, velz, _ = sat_pos
+            tx_pos_x[sec][ngrx_channel] = tx_pos_x[sec][ngrx_channel + J_2] = posx
+            tx_pos_y[sec][ngrx_channel] = tx_pos_y[sec][ngrx_channel + J_2] = posy
+            tx_pos_z[sec][ngrx_channel] = tx_pos_z[sec][ngrx_channel + J_2] = posz
+            tx_vel_x[sec][ngrx_channel] = tx_vel_x[sec][ngrx_channel + J_2] = velx
+            tx_vel_y[sec][ngrx_channel] = tx_vel_y[sec][ngrx_channel + J_2] = vely
+            tx_vel_z[sec][ngrx_channel] = tx_vel_z[sec][ngrx_channel + J_2] = velz
+            tx_clk_bias[sec][ngrx_channel] = tx_clk_bias[sec][ngrx_channel + J_2] = (
+                bias * constants.c
+            )
+            prn_code[sec][ngrx_channel] = prn_code[sec][ngrx_channel + J_2] = prn1
+            sv_num[sec][ngrx_channel] = sv_num[sec][ngrx_channel + J_2] = sv_num1
+            track_id[sec][ngrx_channel] = track_id[sec][ngrx_channel + J_2] = (
+                np.where(trans_id_unique == prn1)[0][0] + 1
+            )
