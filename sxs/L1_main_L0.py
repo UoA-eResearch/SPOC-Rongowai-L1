@@ -183,12 +183,10 @@ rx_pos_xyz = [rx_pos_x, rx_pos_y, rx_pos_z]
 rx_vel_x = interp_ddm(pvt_utc, rx_vel_x_pvt, ddm_utc)
 rx_vel_y = interp_ddm(pvt_utc, rx_vel_y_pvt, ddm_utc)
 rx_vel_z = interp_ddm(pvt_utc, rx_vel_z_pvt, ddm_utc)
-rx_vel_xyz = [rx_vel_x, rx_vel_y, rx_vel_z]
 # interpolate rx roll/pitch/yaw onto new time grid
 rx_roll = interp_ddm(pvt_utc, rx_roll_pvt, ddm_utc)
 rx_pitch = interp_ddm(pvt_utc, rx_pitch_pvt, ddm_utc)
 rx_yaw = interp_ddm(pvt_utc, rx_yaw_pvt, ddm_utc)
-rx_attitude = [rx_roll, rx_pitch, rx_yaw]
 # interpolate bias+drift onto new time grid
 rx_clk_bias_m = interp_ddm(pvt_utc, rx_clk_bias_m_pvt, ddm_utc)
 rx_clk_drift_mps = interp_ddm(pvt_utc, rx_clk_drift_mps_pvt, ddm_utc)
@@ -418,3 +416,38 @@ static_gps_eirp = np.full([*transmitter_id.shape], np.nan)
 
 sx_rx_gain_copol = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
+
+# iterate over each second of flight
+for sec in range(len(transmitter_id)):
+
+    # bundle up craft pos/vel/attitude data into per sec, and rx1
+    rx_pos_xyz1 = [rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]]
+    rx_vel_xyz1 = [rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]]
+    rx_attitude1 = [rx_roll[sec], rx_pitch[sec], rx_yaw[sec]]
+    rx1 = {
+        "rx_pos_xyz": rx_pos_xyz1,
+        "rx_vel_xyz": rx_vel_xyz1,
+        "rx_attitude": rx_attitude1,
+    }
+
+    # variables are solved only for LHCP channels
+    # RHCP channels share the same vales except RX gain solved for each channel
+    for ngrx_channel in range(J_2):
+        # bundle up satellite position and velocity data into per sec, and tx1
+        tx_pos_xyz1 = [
+            tx_pos_x[sec][ngrx_channel],
+            tx_pos_y[sec][ngrx_channel],
+            tx_pos_z[sec][ngrx_channel],
+        ]
+        tx_vel_xyz1 = [
+            tx_vel_x[sec][ngrx_channel],
+            tx_vel_y[sec][ngrx_channel],
+            tx_vel_z[sec][ngrx_channel],
+        ]
+        trans_id1 = prn_code[sec][ngrx_channel]
+        sv_num1 = sv_num[sec][ngrx_channel]
+        ddm_ant1 = ddm_ant[sec][ngrx_channel]
+        tx1 = {"tx_pos_xyz": tx_pos_xyz1, "tx_vel_xyz": tx_vel_xyz1, "sv_num": sv_num1}
+
+        # TODO is checking only pos_x enough? it could be.
+        # if not np.isnan(tx_pos_x[sec][ngrx_channel]):
