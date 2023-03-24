@@ -20,6 +20,8 @@ from load_files import (
     get_orbit_file,
     load_dat_file_grid,
 )
+from specular import sp_solver
+
 
 # Required to load the land cover mask file
 Image.MAX_IMAGE_PIXELS = None
@@ -210,6 +212,7 @@ ant_temp_nadir = interp_ddm(eng_timestamp, nadir_ant_temp_eng, ddm_utc)
 # https://pyproj4.github.io/pyproj/stable/gotchas.html#upgrading-to-pyproj-2-from-pyproj-1
 ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
 lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
+# ecef2ella
 lon, lat, alt = pyproj.transform(ecef, lla, *rx_pos_xyz, radians=False)
 rx_pos_lla = [lat, lon, alt]
 
@@ -417,13 +420,14 @@ static_gps_eirp = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_copol = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
 
+
 # iterate over each second of flight
 for sec in range(len(transmitter_id)):
 
     # bundle up craft pos/vel/attitude data into per sec, and rx1
-    rx_pos_xyz1 = [rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]]
-    rx_vel_xyz1 = [rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]]
-    rx_attitude1 = [rx_roll[sec], rx_pitch[sec], rx_yaw[sec]]
+    rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
+    rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
+    rx_attitude1 = np.array([rx_roll[sec], rx_pitch[sec], rx_yaw[sec]])
     rx1 = {
         "rx_pos_xyz": rx_pos_xyz1,
         "rx_vel_xyz": rx_vel_xyz1,
@@ -434,20 +438,26 @@ for sec in range(len(transmitter_id)):
     # RHCP channels share the same vales except RX gain solved for each channel
     for ngrx_channel in range(J_2):
         # bundle up satellite position and velocity data into per sec, and tx1
-        tx_pos_xyz1 = [
-            tx_pos_x[sec][ngrx_channel],
-            tx_pos_y[sec][ngrx_channel],
-            tx_pos_z[sec][ngrx_channel],
-        ]
-        tx_vel_xyz1 = [
-            tx_vel_x[sec][ngrx_channel],
-            tx_vel_y[sec][ngrx_channel],
-            tx_vel_z[sec][ngrx_channel],
-        ]
+        tx_pos_xyz1 = np.array(
+            [
+                tx_pos_x[sec][ngrx_channel],
+                tx_pos_y[sec][ngrx_channel],
+                tx_pos_z[sec][ngrx_channel],
+            ]
+        )
+        tx_vel_xyz1 = np.array(
+            [
+                tx_vel_x[sec][ngrx_channel],
+                tx_vel_y[sec][ngrx_channel],
+                tx_vel_z[sec][ngrx_channel],
+            ]
+        )
         trans_id1 = prn_code[sec][ngrx_channel]
         sv_num1 = sv_num[sec][ngrx_channel]
         ddm_ant1 = ddm_ant[sec][ngrx_channel]
         tx1 = {"tx_pos_xyz": tx_pos_xyz1, "tx_vel_xyz": tx_vel_xyz1, "sv_num": sv_num1}
 
         # TODO is checking only pos_x enough? it could be.
-        # if not np.isnan(tx_pos_x[sec][ngrx_channel]):
+        if not np.isnan(tx_pos_x[sec][ngrx_channel]):
+            x = sp_solver(tx_pos_xyz1, rx_pos_xyz1, dem, dtu10, landmask_nz)
+            sys.exit()

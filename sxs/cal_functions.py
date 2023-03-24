@@ -28,7 +28,7 @@ for i in range(3):
 
 
 def L1a_counts2watts(ddm_counts, std_dev, rf_source):
-    """Converts raw counts to calibrated power in watts.
+    """Converts raw DDM counts to DDM power in watts
 
     Parameters
     ----------
@@ -76,7 +76,7 @@ def ddm_calibration(
     peak_ddm_watts,
     peak_delay_bin,
 ):
-    """Calculate satellite orbital information using C++ function.
+    """Calibrates raw DDMs into power DDMs in Watts
 
     Parameters
     ----------
