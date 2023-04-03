@@ -5,6 +5,8 @@ import numpy as np
 import pyproj
 from scipy import constants
 from scipy.interpolate import interpn
+import geopy.distance as geo_dist
+import time
 
 # define WGS84
 wgs84 = pyproj.Geod(ellps="WGS84")
@@ -76,8 +78,15 @@ def ite(tx_pos_xyz, rx_pos_xyz):
         s_lambda = nadir(m_lambda)
         s_mu = nadir(m_mu)
         # propagation distance
-        f_lambda = pdis(tx_pos_xyz, rx_pos_xyz, s_lambda)
-        f_mu = pdis(tx_pos_xyz, rx_pos_xyz, s_mu)
+        f_lambda = np.linalg.norm(s_lambda - tx_pos_xyz, 2) + np.linalg.norm(
+            rx_pos_xyz - s_lambda, 2
+        )
+        f_mu = np.linalg.norm(s_mu - tx_pos_xyz, 2) + np.linalg.norm(
+            rx_pos_xyz - s_mu, 2
+        )
+
+        # f_lambda = pdis(tx_pos_xyz, rx_pos_xyz, s_lambda)
+        # f_mu = pdis(tx_pos_xyz, rx_pos_xyz, s_mu)
 
         if f_lambda > f_mu:
             a = m_lambda
@@ -137,7 +146,6 @@ def los_status(tx_pos_xyz, rx_pos_xyz):
 def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
     """% This code fine-tunes the coordinate of the initial SP based on the DTU10
     % datum thorugh a number of iterative steps."""
-
     # find the pixel location
     # in Python sx_lla is (lon, lat, alt) not (lat, lon, alt)
     min_lat, max_lat = (sx_lla[1] - L / 2, sx_lla[1] + L / 2)
@@ -145,10 +153,25 @@ def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
 
     lat_bin = np.linspace(min_lat, max_lat, num_grid)
     lon_bin = np.linspace(min_lon, max_lon, num_grid)
-    ele = np.zeros((num_grid, num_grid))
-    delay_chip = np.zeros((num_grid, num_grid))
 
-    for m in range(num_grid):
+    # Vectorise the 11*11 nested loop
+    lat_bin = np.repeat(lat_bin, 11)
+    lon_bin = np.tile(lon_bin, 11)
+    ele = interpn(
+        points=(model["lon"], model["lat"]),
+        values=model["ele"],
+        xi=(lon_bin, lat_bin),
+        method="linear",
+    )
+    p_x, p_y, p_z = pyproj.transform(lla, ecef, *[lon_bin, lat_bin, ele], radians=False)
+    p_xyz = np.array((p_x, p_y, p_z))
+    p_xyz_t = p_xyz - tx_xyz.reshape(-1, 1)
+    p_xyz_r = np.repeat(rx_xyz.reshape(-1, 1), len(p_x), axis=1) - p_xyz
+    delay_chip = np.linalg.norm(p_xyz_t, 2, axis=0) + np.linalg.norm(p_xyz_r, 2, axis=0)
+    ele = ele.reshape(11, -1)
+    delay_chip = (delay_chip / l_chip).reshape(11, -1)
+
+    """for m in range(num_grid):
         for n in range(num_grid):
 
             p_ele = interpn(
@@ -161,10 +184,26 @@ def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
             p_xyz = pyproj.transform(
                 lla, ecef, *[lon_bin[n], lat_bin[m], p_ele], radians=False
             )
-            p_delay = pdis(tx_xyz, rx_xyz, p_xyz)
+            p_delay = np.linalg.norm(p_xyz - tx_xyz, 2) + np.linalg.norm(
+                rx_xyz - p_xyz, 2
+            )
+            p_delay_old.append(p_delay)
             ele[m, n] = p_ele
-            delay_chip[m, n] = p_delay / l_chip
-    print()
+            delay_chip[m, n] = p_delay / l_chip"""
+
+    # index of the pixel with minimal reflection path
+    min_delay = np.min(delay_chip)
+    m_i, n_i = np.where(delay_chip == (np.min(delay_chip)))
+
+    # unpack arrays with [0] else they keep nesting
+    sx_temp = [lon_bin[n_i][0], lat_bin[m_i][0], ele[m_i, n_i][0]]
+    # TODO we calculate geodesic distance between points in metres - replaces m_lldist.m
+    # this is between Matlab idx = 5,6 so extra "-1" due to python 0-indexing (Mat5,6 -> Py4,5)
+    NN = int((num_grid - 1) / 2) - 1
+    res = geo_dist.geodesic(
+        (lat_bin[NN], lon_bin[NN]), (lat_bin[NN + 1], lon_bin[NN + 1])
+    ).m
+    return res, min_delay, sx_temp
 
 
 def finetune_ocean(tx_pos_xyz, rx_pos_xyz, sp_lla_coarse, model, L, res_grid):
@@ -182,7 +221,6 @@ def finetune_ocean(tx_pos_xyz, rx_pos_xyz, sp_lla_coarse, model, L, res_grid):
 
     # derive SP on the ocean surface
     res = 1000
-
     while res > res_grid:
         res, _, sp_lla_coarse = finetune(
             tx_pos_xyz, rx_pos_xyz, sp_lla_coarse, L, model
@@ -208,6 +246,9 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
         # converge criteria 0.01 meter
         res_ocean_meter = 0.01
 
+    x = time.time()
     sx_pos_xyz = finetune_ocean(
         tx_pos_xyz, rx_pos_xyz, sx_lla_coarse, dtu10, L_ocean_deg, res_ocean_meter
     )
+    print(time.time() - x)
+    print("apple")

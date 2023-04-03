@@ -11,3 +11,4 @@ dependencies:
   - rasterio
   - astropy
   - pyproj
+  - geopy
