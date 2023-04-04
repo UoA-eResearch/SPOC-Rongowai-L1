@@ -6,7 +6,7 @@ import array
 import numpy as np
 import os
 from pathlib import Path
-from scipy.interpolate import interp1d
+from scipy.interpolate import interp1d, interpn
 
 # binary types for loading of gridded binary files
 grid_type_list = [
@@ -18,8 +18,14 @@ grid_type_list = [
     ("num_lon", "H"),
 ]
 
+# define constants once, used in LOCAL_DEM function
+LOCAL_DEM_L = 90
+LOCAL_DEM_RES = 30
+LOCAL_DEM_MARGIN = 0
+LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
+LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
 
-#
+
 def load_netcdf(netcdf_variable):
     """Unpack netcdf variable to python variable.
        Removes masked rows from 1D, 2D, & 4D NetCDF variables.
@@ -195,3 +201,31 @@ def interp_ddm(x, y, x_ddm):
     # regrid ddm data using 1d interpolator
     interp_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
     return interp_func(x_ddm)
+
+
+def get_local_dem(sx_pos_lla, dem, dtu10, dist):
+
+    lon_index = np.argmin(abs(dem["lon"] - sx_pos_lla[0]))
+    lat_index = np.argmin(abs(dem["lat"] - sx_pos_lla[1]))
+
+    local_lon = dem["lon"][lon_index - LOCAL_HALF_NP : lon_index + LOCAL_HALF_NP + 1]
+    local_lat = dem["lat"][lat_index - LOCAL_HALF_NP : lat_index + LOCAL_HALF_NP + 1]
+
+    if dist > LOCAL_DEM_MARGIN:
+        local_ele = dem["ele"][
+            lon_index - LOCAL_HALF_NP : lon_index + LOCAL_HALF_NP + 1,
+            lat_index - LOCAL_HALF_NP : lat_index + LOCAL_HALF_NP + 1,
+        ]
+    else:
+
+        local_ele = interpn(
+            points=(dtu10["lon"], dtu10["lat"]),
+            values=dtu10["ele"],
+            xi=(
+                np.tile(local_lon, LOCAL_NUM_PIXELS),
+                np.repeat(local_lat, LOCAL_NUM_PIXELS),
+            ),
+            method="linear",
+        ).reshape(-1, LOCAL_NUM_PIXELS)
+
+    return {"lat": local_lat, "lon": local_lon, "ele": local_ele}

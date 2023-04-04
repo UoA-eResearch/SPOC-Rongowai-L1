@@ -207,6 +207,8 @@ for ngrx_channel in range(J):
 ant_temp_zenith = interp_ddm(eng_timestamp, zenith_ant_temp_eng, ddm_utc)
 ant_temp_nadir = interp_ddm(eng_timestamp, nadir_ant_temp_eng, ddm_utc)
 
+
+# ecef2lla Matlab function
 # define projections and transform
 # TODO function is depreciated,see following url
 # https://pyproj4.github.io/pyproj/stable/gotchas.html#upgrading-to-pyproj-2-from-pyproj-1
@@ -217,6 +219,7 @@ lon, lat, alt = pyproj.transform(ecef, lla, *rx_pos_xyz, radians=False)
 rx_pos_lla = [lat, lon, alt]
 
 # determine specular point "over land" flag from landmask
+# replaces get_map_value function
 status_flags_one_hz = interpn(
     points=(landmask_nz["lon"], landmask_nz["lat"]),
     values=landmask_nz["ele"],
@@ -459,5 +462,12 @@ for sec in range(len(transmitter_id)):
 
         # TODO is checking only pos_x enough? it could be.
         if not np.isnan(tx_pos_x[sec][ngrx_channel]):
-            x = sp_solver(tx_pos_xyz1, rx_pos_xyz1, dem, dtu10, landmask_nz)
+            (
+                sx_pos_xyz1,
+                inc_angle_deg1,
+                d_snell_deg1,
+                dist_to_coast_km1,
+                LOS_flag1,
+            ) = sp_solver(tx_pos_xyz1, rx_pos_xyz1, dem, dtu10, landmask_nz)
+
             sys.exit()
