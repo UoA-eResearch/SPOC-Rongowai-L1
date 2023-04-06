@@ -304,5 +304,3 @@ def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
         surface_type = -1
     else:
         surface_type = landcover_type
-
-    print(surface_type)

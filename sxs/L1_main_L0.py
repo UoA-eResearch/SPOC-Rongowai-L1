@@ -493,4 +493,39 @@ for sec in range(len(transmitter_id)):
                     sx_pos_lla1, landmask_nz, lcv_mask, water_mask
                 )
 
+                # only process samples with valid sx positions, i.e., LOS = 1
+                # derive sx velocity
+                # time step in second
+                dt = 1
+                tx_pos_xyz_dt = tx_pos_xyz1 + tx_vel_xyz1  # dt* no point if this is 1s
+                rx_pos_xyz_dt = rx_pos_xyz1 + rx_vel_xyz1
+                (
+                    _,
+                    sx_pos_xyz_dt,
+                    _,
+                    _,
+                    _,
+                    _,
+                ) = sp_solver(tx_pos_xyz_dt, rx_pos_xyz_dt, dem, dtu10, landmask_nz)
+
+                sx_vel_xyz1 = np.array(sx_pos_xyz_dt) - np.array(sx_pos_xyz1)
+
+                # save sx values to variables
+                sx_pos_x[sec][ngrx_channel] = sx_pos_xyz1[0]
+                sx_pos_y[sec][ngrx_channel] = sx_pos_xyz1[1]
+                sx_pos_z[sec][ngrx_channel] = sx_pos_xyz1[2]
+
+                sx_lat[sec][ngrx_channel] = sx_pos_lla1[0]
+                sx_lon[sec][ngrx_channel] = sx_pos_lla1[1]
+                sx_alt[sec][ngrx_channel] = sx_pos_lla1[2]
+
+                sx_vel_x[sec][ngrx_channel] = sx_vel_xyz1[0]
+                sx_vel_y[sec][ngrx_channel] = sx_vel_xyz1[1]
+                sx_vel_z[sec][ngrx_channel] = sx_vel_xyz1[2]
+                surface_type[sec][ngrx_channel] = surface_type1
+
+                sx_inc_angle[sec][ngrx_channel] = inc_angle_deg1
+                sx_d_snell_angle[sec][ngrx_channel] = d_snell_deg1
+                dist_to_coast_km[sec][ngrx_channel] = dist_to_coast_km1
+
             sys.exit()
