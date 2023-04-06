@@ -336,4 +336,4 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     d_phi = np.rad2deg(np.arctan(d_phi1))
     d_snell_deg = abs(theta_i - theta_s) + abs(d_phi)
 
-    return sx_pos_xyz, inc_angle_deg, d_snell_deg, dist, LOS_flag
+    return sx_pos_lla, sx_pos_xyz, inc_angle_deg, d_snell_deg, dist, LOS_flag

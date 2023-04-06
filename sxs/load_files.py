@@ -3,6 +3,7 @@
 # Functions relating to the finding, loading, and processing of input files
 
 import array
+import math
 import numpy as np
 import os
 from pathlib import Path
@@ -229,3 +230,79 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
         ).reshape(-1, LOCAL_NUM_PIXELS)
 
     return {"lat": local_lat, "lon": local_lon, "ele": local_ele}
+
+
+def get_landcover_type2(lat_P, lon_P, lcv_mask):
+    """% this function returns the landcover type of the coordinate P (lat lon)
+    % over landsurface"""
+
+    # bounding box is hardcoded, so N/M dimensions should be too...
+    lat_max, lat_range, lat_M = -34, 13.5, 21000
+    lat_res = lat_range / lat_M
+    lon_min, lon_range, lon_N = 165.75, 13.5, 21000
+    lon_res = lat_range / lon_N
+
+    # -1 to account for 1-based (matlab) vs 0-base indexing
+    lat_index = math.ceil((lat_max - lat_P) / lat_res) - 1
+    lon_index = math.ceil((lon_P - lon_min) / lon_res) - 1
+
+    lcv_RGB1 = lcv_mask.getpixel((lat_index, lon_index))
+    # drop alpha channel in index 3
+    lcv_RGB = tuple([z / 255 for z in lcv_RGB1[:3]])
+    color = [
+        (0.8, 0, 0.8),  # 1: artifical
+        (0.6, 0.4, 0.2),  # 2: barely vegetated
+        (0, 0, 1),  # 3: inland water
+        (1, 1, 0),  # 4: crop
+        (0, 1, 0),  # 5: grass
+        (0.6, 0.2, 0),  # 6: shrub
+        (0, 0.2, 0),
+    ]  # 7: forest
+
+    if sum(lcv_RGB) == 3:
+        landcover_type = -1
+    else:
+        for idx, val in enumerate(color):
+            if lcv_RGB == val:
+                landcover_type = idx + 1  # match matlab indexes
+            else:
+                raise Exception("landcover type not found")
+    return landcover_type
+
+
+def get_pek_value(lat, lon, water_mask):
+
+    # minus 1 to account for 0-base indexing
+    lat_index = math.ceil((water_mask["lat_max"] - lat) / water_mask["res_deg"]) - 1
+    lon_index = math.ceil((lon - water_mask["lon_min"]) / water_mask["res_deg"]) - 1
+
+    return water_mask["data"][lat_index, lon_index]
+
+
+def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
+    # this function returns the surface type of a coordinate P <lat lon>
+    # P[1] = lat, P[0] = lon
+    landcover_type = get_landcover_type2(P[1], P[0], lcv_mask)
+
+    lat_pek = int(abs(P[1]) // 10 * 10)
+    lon_pek = int(abs(P[0]) // 10 * 10)
+
+    file_id = str(lon_pek) + "E_" + str(lat_pek) + "S"
+    # water_mask1 = water_mask[file_id]
+    pek_value = get_pek_value(P[1], P[0], water_mask[file_id])
+
+    dist_coast = interpn(
+        points=(cst_mask["lon"], cst_mask["lat"]),
+        values=cst_mask["ele"],
+        xi=(P[0], P[1]),
+        method="linear",
+    )[0]
+
+    if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
+        surface_type = 3  # coordinate on inland water
+    elif all([pek_value > 0, dist_coast < 0.5]):
+        surface_type = -1
+    else:
+        surface_type = landcover_type
+
+    print(surface_type)

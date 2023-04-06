@@ -19,6 +19,7 @@ from load_files import (
     interp_ddm,
     get_orbit_file,
     load_dat_file_grid,
+    get_surf_type2,
 )
 from specular import sp_solver
 
@@ -101,10 +102,11 @@ dem_path = Path().absolute().joinpath(Path("./dat/dem/"))
 dem_filename = Path("nzsrtm_30_v1.tif")
 dem = rasterio.open(dem_path.joinpath(dem_filename))
 dem = {
-    "ele": dem.read(),
+    "ele": dem.read(1),
     "lat": np.linspace(dem.bounds.top, dem.bounds.bottom, dem.height),
     "lon": np.linspace(dem.bounds.left, dem.bounds.right, dem.width),
 }
+
 
 # load DTU10 model
 dtu_path = Path().absolute().joinpath(Path("./dat/dtu/"))
@@ -121,17 +123,21 @@ lcv_path = Path().absolute().joinpath(Path("./dat/lcv/"))
 lcv_filename = Path("lcv.png")
 lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 
-# TODO -------------- This isn't actually used??
 # process inland water mask
-# pek_path = Path().absolute().joinpath(Path("./dat/pek/"))
-# pek_filename_1 = Path("occurrence_160E_40S.tif")
-# pek_filename_2 = Path("occurrence_170E_30S.tif")
-# pek_filename_3 = Path("occurrence_170E_40S.tif")
-# water_mask = {
-#    "water_mask_160E_40S": rasterio.open(pek_path.joinpath(pek_filename_1)),
-#    "water_mask_170E_30S": rasterio.open(pek_path.joinpath(pek_filename_2)),
-#    "water_mask_170E_40S": rasterio.open(pek_path.joinpath(pek_filename_3)),
-# }
+pek_path = Path().absolute().joinpath(Path("./dat/pek/"))
+
+water_mask = {}
+for path in [
+    "160E_40S",
+    # "170E_30S", # disabled while developing for RAM
+    # "170E_40S",
+]:
+    water_mask[path] = {}
+    pek_file = rasterio.open(pek_path.joinpath("occurrence_" + path + ".tif"))
+    water_mask[path]["lon_min"] = pek_file._transform[0]
+    water_mask[path]["res_deg"] = pek_file._transform[1]
+    water_mask[path]["lat_max"] = pek_file._transform[3]
+    water_mask[path]["data"] = pek_file.read(1)
 
 # load PRN-SV and SV-EIRP(static) LUT
 gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
@@ -460,14 +466,31 @@ for sec in range(len(transmitter_id)):
         ddm_ant1 = ddm_ant[sec][ngrx_channel]
         tx1 = {"tx_pos_xyz": tx_pos_xyz1, "tx_vel_xyz": tx_vel_xyz1, "sv_num": sv_num1}
 
+        # only process these with valid TX positions
         # TODO is checking only pos_x enough? it could be.
         if not np.isnan(tx_pos_x[sec][ngrx_channel]):
+
+            # Part 4.1: SP solver
+            # derive SP positions, angle of incidence and distance
+            # to coast
+            # returning sx_pos_lla1 in Py version to avoid needless coord conversions
             (
+                sx_pos_lla1,
                 sx_pos_xyz1,
                 inc_angle_deg1,
                 d_snell_deg1,
                 dist_to_coast_km1,
                 LOS_flag1,
             ) = sp_solver(tx_pos_xyz1, rx_pos_xyz1, dem, dtu10, landmask_nz)
+
+            LOS_flag[sec][ngrx_channel] = int(LOS_flag1)
+
+            # only process samples with valid sx positions, i.e., LOS = True
+            if LOS_flag1:
+                # <lon,lat,alt> of the specular reflection
+                # algorithm version 1.11
+                surface_type1 = get_surf_type2(
+                    sx_pos_lla1, landmask_nz, lcv_mask, water_mask
+                )
 
             sys.exit()
