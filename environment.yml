@@ -12,3 +12,6 @@ dependencies:
   - astropy
   - pyproj
   - geopy
+  - pymap3d
+  - pandas
+  - openpyxl
