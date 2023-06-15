@@ -21,8 +21,11 @@ grid_type_list = [
     ("num_lon", "H"),
 ]
 
+# L = 18030
+# grid_res = 30  # L may need to be updated in the future
+
 # define constants once, used in LOCAL_DEM function
-LOCAL_DEM_L = 90
+LOCAL_DEM_L = 18030
 LOCAL_DEM_RES = 30
 LOCAL_DEM_MARGIN = 0
 LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
@@ -388,7 +391,7 @@ def get_pek_value(lat, lon, water_mask):
 
 def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
     # this function returns the surface type of a coordinate P <lat lon>
-    # P[1] = lat, P[0] = lon
+    # P[0] = lat, P[1] = lon
     landcover_type = get_landcover_type2(P[0], P[1], lcv_mask)
 
     lat_pek = int(abs(P[0]) // 10 * 10)

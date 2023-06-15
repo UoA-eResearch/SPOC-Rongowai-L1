@@ -23,7 +23,7 @@ from load_files import (
     get_orbit_file,
     load_dat_file_grid,
     get_surf_type2,
-    get_local_dem_new,
+    get_local_dem,
     write_netcdf,
 )
 from specular import (
@@ -1067,9 +1067,7 @@ for sec in range(len(transmitter_id)):
             L = 18030
             grid_res = 30  # L may need to be updated in the future
 
-            local_dem1 = get_local_dem_new(
-                sx_pos_lla1, L, grid_res, dem, dtu10, dist_to_coast1
-            )
+            local_dem1 = get_local_dem(sx_pos_lla1, dem, dtu10, dist_to_coast1)
 
             A_eff1, A_eff_all1 = get_ddm_Aeff(
                 tx1, rx1, sx1, local_dem1, phy_ele_size, chi2
