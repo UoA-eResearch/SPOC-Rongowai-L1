@@ -392,13 +392,12 @@ def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
     # water_mask1 = water_mask[file_id]
     pek_value = get_pek_value(P[0], P[1], water_mask[file_id])
 
-    # dist_coast = interpn(
-    #     points=(cst_mask["lon"], cst_mask["lat"]),
-    #     values=cst_mask["ele"],
-    #     xi=(P[0], P[1]),
-    #     method="linear",
-    # )[0]
-    dist_coast = get_map_value(P[0], P[1], cst_mask)
+    dist_coast = interpn(
+        points=(cst_mask["lon"], cst_mask["lat"]),
+        values=cst_mask["ele"],
+        xi=(P[1], P[0]),
+        method="linear",
+    )[0]
 
     if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
         # surface_type = 3  # not consistent with matlab code

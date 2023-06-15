@@ -50,8 +50,8 @@ Image.MAX_IMAGE_PIXELS = None
 
 # specify input L0 netcdf file
 raw_data_path = Path().absolute().joinpath(Path("./dat/raw/"))
-# L0_filename = Path("20221103-121416_NZNV-NZCH.nc")
-L0_filename = Path("20230404-065056_NZTU-NZWN.nc")
+L0_filename = Path("20221103-121416_NZNV-NZCH.nc")
+# L0_filename = Path("20230404-065056_NZTU-NZWN.nc")
 L0_dataset = nc.Dataset(raw_data_path.joinpath(L0_filename))
 
 
@@ -639,6 +639,7 @@ sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
 # iterate over each second of flight
 for sec in range(len(transmitter_id)):
     t0 = timer()
+    tn = timer()
     # retrieve rx positions, velocities and attitdues
     # bundle up craft pos/vel/attitude data into per sec, and rx1
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
@@ -680,6 +681,8 @@ for sec in range(len(transmitter_id)):
         # only process these with valid TX positions
         # TODO is checking only pos_x enough? it could be.
         if not np.isnan(tx_pos_x[sec][ngrx_channel]):
+            tn1 = timer()
+
             # Part 4.1: SP solver
             # derive SP positions, angle of incidence and distance to coast
             # returning sx_pos_lla1 in Py version to avoid needless coord conversions
@@ -741,6 +744,8 @@ for sec in range(len(transmitter_id)):
                 sx_d_snell_angle[sec][ngrx_channel] = d_snell_deg1
                 dist_to_coast_km[sec][ngrx_channel] = dist_to_coast_km1
 
+                tn += timer() - tn1
+
                 # Part 4.2: SP-related variables - 1
                 # this part derives tx/rx gains, ranges and other related variables
                 # derive SP related geo-parameters, including angles in various frames, ranges and antenna gain/GPS EIRP
@@ -784,11 +789,10 @@ for sec in range(len(transmitter_id)):
                 sx_rx_gain[sec, ngrx_channel + J_2] = sx_rx_gain_RHCP1[
                     1
                 ]  # RHCP channel rx gain
-
     print(
         f"******** start processing part 4A {sec} second data with {timer() - t0} ********"
     )
-
+    print(f"*{timer() - tn}*")
 # expand to RHCP channels
 sx_pos_x[:, J_2:J] = sx_pos_x[:, 0:J_2]
 sx_pos_y[:, J_2:J] = sx_pos_y[:, 0:J_2]

@@ -96,9 +96,7 @@ def ite(tx_pos_xyz, rx_pos_xyz):
 
         if f_lambda > f_mu:
             a = m_lambda
-            b = b
         else:
-            a = a
             b = m_mu
     # TODO: stlightly different from matlab
     return nadir(m_lambda)
@@ -320,13 +318,13 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     # sx_pos_xyz = pyproj.transform(lla, ecef, *sx_pos_lla, radians=False)
     # replaces get_map_value function
     # TODO Q: the resualt is not the same as get_map_value
-    # dist = interpn(
-    #     points=(dist_to_coast_nz["lon"], dist_to_coast_nz["lat"]),
-    #     values=dist_to_coast_nz["ele"],
-    #     xi=(sx_pos_lla[0], sx_pos_lla[1]),
-    #     method="linear",
-    # )
-    dist = get_map_value(sx_pos_lla[0], sx_pos_lla[1], dist_to_coast_nz)
+    dist = interpn(
+        points=(dist_to_coast_nz["lon"], dist_to_coast_nz["lat"]),
+        values=dist_to_coast_nz["ele"],
+        xi=(sx_pos_lla[1], sx_pos_lla[0]),
+        method="linear",
+    )
+    # dist = get_map_value(sx_pos_lla[0], sx_pos_lla[1], dist_to_coast_nz)
 
     local_dem = get_local_dem(sx_pos_lla, dem, dtu10, dist)
     theta_i, theta_s, phi_i, phi_s = angles(local_dem, tx_pos_xyz, rx_pos_xyz)
