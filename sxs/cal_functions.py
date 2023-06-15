@@ -14,7 +14,7 @@ L1a_cal_ddm_power_dbm = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_power_dbm_filen
 # offset delay rows to derive noise floor
 offset = 4
 # map rf_source to ANZ_port
-ANZ_port = {0: 0, 4: 1, 8: 2}
+ANZ_port_dict = {0: 0, 4: 1, 8: 2}
 binning_thres_db = [50.5, 49.6, 50.4]
 
 # create the interpolation functions for the 3 ports
@@ -28,36 +28,6 @@ for i in range(3):
     )
 
 
-def get_ANZ_port(rf_source):
-    """Returns the ANZ port for the given rf_source
-
-    Parameters
-    ----------
-    rf_source : int
-        Radio frequency source value (RF1/RF2/RF3)
-
-    Returns
-    -------
-    int
-        ANZ port value
-    """
-    if rf_source == 0:
-        # zenith
-        # anz_port = 1
-        anz_port = 0
-    elif rf_source == 4:
-        # nadir LHCP
-        # anz_port = 2
-        anz_port = 1
-    elif rf_source == 8:
-        # nadir RHCP
-        # anz_port = 3
-        anz_port = 2
-    else:
-        assert False, f"Invalid rf_source value {rf_source}"
-    return anz_port
-
-
 def power2db(power):
     return 10 * math.log10(power)
 
@@ -66,9 +36,7 @@ def db2power(db):
     return np.power(10, db / 10)
 
 
-def L1a_counts2watts(
-    ddm_counts, ANZ_port, ddm_counts_cal_db, ddm_power_cal_dbm, std_dev
-):
+def L1a_counts2watts(ddm_counts, ANZ_port, std_dev):
     """Converts raw DDM counts to DDM power in watts
 
     Parameters
@@ -89,12 +57,12 @@ def L1a_counts2watts(
     # cable_loss_db = [1.8051, 0.6600, 0.5840]
 
     # select approiate calibration constants based on the input ANZ port channel
-    ddm_counts_db_ch = ddm_counts_cal_db[ANZ_port]
-    ddm_power_dbm_ch = ddm_power_cal_dbm[ANZ_port]
+    # ddm_counts_db_ch = ddm_counts_cal_db[ANZ_port]
+    # ddm_power_dbm_ch = ddm_power_cal_dbm[ANZ_port]
 
     std_dev_ch = std_dev[ANZ_port]
 
-    binning_thres_db_ch = binning_thres_db[ANZ_port]
+    # binning_thres_db_ch = binning_thres_db[ANZ_port]
     # cable_loss_db_ch = cable_loss_db[ANZ_port]
 
     # convert to dB scale
@@ -195,55 +163,60 @@ def ddm_calibration(
             first_scale_factor1 = first_scale_factor[sec, ngrx_channel]
             raw_counts1 = raw_counts[sec, ngrx_channel, :, :]
             # solve only when presenting a valid PRN and DDM counts
-            if (
-                (not np.isnan(prn_code1))
-                and (raw_counts1[0, 0] != raw_counts1[20, 2])
-                and (raw_counts1[1, 1] != 0)
+            if any(
+                [
+                    np.isnan(prn_code1),
+                    (raw_counts1[1, 1] == 0),
+                    raw_counts1[0, 0] == raw_counts1[20, 2],
+                ]
             ):
-                # scale raw counts and convert from counts to watts
-                ANZ_port1 = get_ANZ_port(rf_source1)
-                ddm_power_counts1 = raw_counts1 * first_scale_factor1
+                continue
 
-                # perform L1a calibration from Counts to Watts
-                ddm_power_watts1 = L1a_counts2watts(
-                    ddm_power_counts1,
-                    ANZ_port1,
-                    L1a_cal_ddm_counts_db,
-                    L1a_cal_ddm_power_dbm,
-                    std_dev1,
-                )
+            # if (
+            #    (not np.isnan(prn_code1))
+            #    and (raw_counts1[0, 0] != raw_counts1[20, 2])
+            #    and (raw_counts1[1, 1] != 0)
+            # ):
+            # scale raw counts and convert from counts to watts
+            ANZ_port1 = ANZ_port_dict[rf_source1]
+            ddm_power_counts1 = raw_counts1 * first_scale_factor1
 
-                # noise floor in counts for each DDM
-                # determine noise counts from offset value
-                ddm_noise_counts1 = np.mean(ddm_power_counts1[-offset - 1 :, :])
-                ddm_noise_watts1 = L1a_counts2watts(
-                    ddm_noise_counts1,
-                    ANZ_port1,
-                    L1a_cal_ddm_counts_db,
-                    L1a_cal_ddm_power_dbm,
-                    std_dev1,
-                )
+            # perform L1a calibration from Counts to Watts
+            ddm_power_watts1 = L1a_counts2watts(
+                ddm_power_counts1,
+                ANZ_port1,
+                std_dev1,
+            )
 
-                # peak ddm location
-                # find peak counts/watts/delay from DDM data
-                peak_ddm_counts1 = np.max(ddm_power_counts1)
-                # 0-based index
-                peak_delay_bin1 = np.where(ddm_power_counts1 == peak_ddm_counts1)[0][0]
+            # noise floor in counts for each DDM
+            # determine noise counts from offset value
+            ddm_noise_counts1 = np.mean(ddm_power_counts1[-offset - 1 :, :])
+            ddm_noise_watts1 = L1a_counts2watts(
+                ddm_noise_counts1,
+                ANZ_port1,
+                std_dev1,
+            )
 
-                peak_ddm_watts1 = np.max(ddm_power_watts1)
+            # peak ddm location
+            # find peak counts/watts/delay from DDM data
+            peak_ddm_counts1 = np.max(ddm_power_counts1)
+            # 0-based index
+            peak_delay_bin1 = np.where(ddm_power_counts1 == peak_ddm_counts1)[0][0]
 
-                # save variables
-                ddm_power_counts[sec][ngrx_channel] = ddm_power_counts1
-                power_analog[sec][ngrx_channel] = ddm_power_watts1
-                # 0-based index
-                ddm_ant[sec][ngrx_channel] = ANZ_port1
-                ddm_noise_counts[sec][ngrx_channel] = ddm_noise_counts1
-                ddm_noise_watts[sec][ngrx_channel] = ddm_noise_watts1
+            peak_ddm_watts1 = np.max(ddm_power_watts1)
 
-                peak_ddm_counts[sec][ngrx_channel] = peak_ddm_counts1
-                peak_ddm_watts[sec][ngrx_channel] = peak_ddm_watts1
-                # this is 0-based
-                peak_delay_bin[sec][ngrx_channel] = peak_delay_bin1
+            # save variables
+            ddm_power_counts[sec][ngrx_channel] = ddm_power_counts1
+            power_analog[sec][ngrx_channel] = ddm_power_watts1
+            # 0-based index
+            ddm_ant[sec][ngrx_channel] = ANZ_port1
+            ddm_noise_counts[sec][ngrx_channel] = ddm_noise_counts1
+            ddm_noise_watts[sec][ngrx_channel] = ddm_noise_watts1
+
+            peak_ddm_counts[sec][ngrx_channel] = peak_ddm_counts1
+            peak_ddm_watts[sec][ngrx_channel] = peak_ddm_watts1
+            # this is 0-based
+            peak_delay_bin[sec][ngrx_channel] = peak_delay_bin1
 
     # derive noise floor, SNR and instrument gain
     for sec in range(len(std_dev_rf1)):

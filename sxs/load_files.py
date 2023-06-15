@@ -269,7 +269,13 @@ def get_local_dem_new(P, L, res, dem_data, dtu_model, dist_to_coast):
             for j in range(num_pixels):
                 pixel_lat = local_lat[i]
                 pixel_lon = local_lon[j]
-                pixel_ele = get_map_value(pixel_lat, pixel_lon, dtu_model)
+                pixel_ele = interpn(
+                    points=(dtu_model["lon"], dtu_model["lat"]),
+                    values=dtu_model["ele"],
+                    xi=(pixel_lon, pixel_lat),
+                    method="linear",
+                )
+                # pixel_ele = get_map_value(pixel_lat, pixel_lon, dtu_model)
                 local_ele[i, j] = pixel_ele
 
     local_dem = {"lat": local_lat, "lon": local_lon, "ele": local_ele.astype("double")}
