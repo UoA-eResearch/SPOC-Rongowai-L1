@@ -593,7 +593,7 @@ L1_postCal["ddm_snr"] = snr_db
 L1_postCal["inst_gain"] = inst_gain
 L1_postCal["ddm_ant"] = ddm_ant  # 0-based
 
-
+"""
 #   # --------------------- Part 4A: SP solver and geometries
 # initialise variables
 # initialise a huge amount of empty arrays
@@ -868,62 +868,67 @@ L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
 
 ############# to save debug time, save and restore variables ##########
 #
-# np.save('debug.npy', L1_postCal)
+# np.save('debug.npy', L1_postCal) """
 #
-# L1_postCal_loaded = np.load('debug.npy', allow_pickle=True).item()
+L1_postCal_loaded = np.load("debug.npy", allow_pickle=True).item()
 ##############
 
-# def dic_to_keys_values(dic):
-#     keys, values = list(dic.keys()), list(dic.values())
-#     return keys, values
+
+def dic_to_keys_values(dic):
+    keys, values = list(dic.keys()), list(dic.values())
+    return keys, values
+
+
 #
 #
-# def numpy_assert_almost_dict_values(dict1, dict2):
-#     keys1, values1 = dic_to_keys_values(dict1)
-#     keys2, values2 = dic_to_keys_values(dict2)
-#     np.testing.assert_equal(keys1, keys2)
-#     np.testing.assert_equal(values1, values2)
+def numpy_assert_almost_dict_values(dict1, dict2):
+    keys1, values1 = dic_to_keys_values(dict1)
+    keys2, values2 = dic_to_keys_values(dict2)
+    np.testing.assert_equal(keys1, keys2)
+    np.testing.assert_equal(values1, values2)
+
+
 #
 #
 # numpy_assert_almost_dict_values(L1_postCal, L1_postCal_loaded)
 ##############
 
-# L1_postCal = np.load('debug.npy', allow_pickle=True).item()
+L1_postCal = np.load("debug.npy", allow_pickle=True).item()
+
+sx_pos_x = L1_postCal["sp_pos_x"]
+sx_pos_y = L1_postCal["sp_pos_y"]
+sx_pos_z = L1_postCal["sp_pos_z"]
 #
-# sx_pos_x = L1_postCal['sp_pos_x']
-# sx_pos_y = L1_postCal['sp_pos_y']
-# sx_pos_z = L1_postCal['sp_pos_z']
+sx_lat = L1_postCal["sp_lat"]
+sx_lon = L1_postCal["sp_lon"]
+sx_alt = L1_postCal["sp_alt"]
 #
-# sx_lat = L1_postCal['sp_lat']
-# sx_lon = L1_postCal['sp_lon']
-# sx_alt = L1_postCal['sp_alt']
+sx_vel_x = L1_postCal["sp_vel_x"]
+sx_vel_y = L1_postCal["sp_vel_y"]
+sx_vel_z = L1_postCal["sp_vel_z"]
 #
-# sx_vel_x = L1_postCal['sp_vel_x']
-# sx_vel_y = L1_postCal['sp_vel_y']
-# sx_vel_z = L1_postCal['sp_vel_z']
+surface_type = L1_postCal["sp_surface_type"]
+dist_to_coast_km = L1_postCal["sp_dist_to_coast_km"]
+LOS_flag = L1_postCal["LOS_flag"]
 #
-# surface_type = L1_postCal['sp_surface_type']
-# dist_to_coast_km = L1_postCal['sp_dist_to_coast_km']
-# LOS_flag = L1_postCal['LOS_flag']
+rx_to_sp_range = L1_postCal["rx_to_sp_range"]
+tx_to_sp_range = L1_postCal["tx_to_sp_range"]
 #
-# rx_to_sp_range = L1_postCal['rx_to_sp_range']
-# tx_to_sp_range = L1_postCal['tx_to_sp_range']
+sx_inc_angle = L1_postCal["sp_inc_angle"]
+sx_d_snell_angle = L1_postCal["sp_d_snell_angle"]
 #
-# sx_inc_angle = L1_postCal['sp_inc_angle']
-# sx_d_snell_angle = L1_postCal['sp_d_snell_angle']
+sx_theta_body = L1_postCal["sp_theta_body"]
+sx_az_body = L1_postCal["sp_az_body"]
+sx_theta_enu = L1_postCal["sp_theta_enu"]
+sx_az_enu = L1_postCal["sp_az_enu"]
 #
-# sx_theta_body = L1_postCal['sp_theta_body']
-# sx_az_body = L1_postCal['sp_az_body']
-# sx_theta_enu = L1_postCal['sp_theta_enu']
-# sx_az_enu = L1_postCal['sp_az_enu']
+sx_rx_gain = L1_postCal["sp_rx_gain"]
 #
-# sx_rx_gain = L1_postCal['sp_rx_gain']
+gps_boresight = L1_postCal["gps_off_boresight_angle_deg"]
 #
-# gps_boresight = L1_postCal['gps_off_boresight_angle_deg']
-#
-# static_gps_eirp = L1_postCal['static_gps_eirp']
-# gps_tx_power_db_w = L1_postCal['gps_tx_power_db_w']
-# gps_ant_gain_db_i = L1_postCal['gps_ant_gain_db_i']
+static_gps_eirp = L1_postCal["static_gps_eirp"]
+gps_tx_power_db_w = L1_postCal["gps_tx_power_db_w"]
+gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
 
 ##############
 
@@ -971,6 +976,9 @@ chi2 = get_chi2(40, 5)  # 0-based
 # derive floating SP bin location and effective scattering area A_eff
 for sec in range(len(transmitter_id)):
     t0 = timer()
+    tn = 0
+    tnn = 0
+    tnnn = 0
 
     # retrieve rx positions and velocities
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
@@ -1050,6 +1058,7 @@ for sec in range(len(transmitter_id)):
         if (not np.isnan(sx_pos_x[sec][ngrx_channel])) and (
             np.count_nonzero(raw_counts1) > 0
         ):
+            tn1 = timer()
             # Part 4.3: SP-related variables - 2
             # this part derives confidence and floating bin locations of SP
             peak_delay_bin1, peak_doppler_bin1 = np.unravel_index(
@@ -1062,17 +1071,21 @@ for sec in range(len(transmitter_id)):
 
             sx1["sx_delay_bin"] = specular_bin1[0]
             sx1["sx_doppler_bin"] = specular_bin1[1]
-
+            tn += timer() - tn1
+            tnn1 = timer()
             # Part 4.4a: Effective scattering area
             L = 18030
             grid_res = 30  # L may need to be updated in the future
 
             local_dem1 = get_local_dem(sx_pos_lla1, dem, dtu10, dist_to_coast1)
 
+            tnn += timer() - tnn1
+            tnnn1 = timer()
             A_eff1, A_eff_all1 = get_ddm_Aeff(
                 tx1, rx1, sx1, local_dem1, phy_ele_size, chi2
             )
 
+            tnnn += timer() - tnnn1
             # save to variables
             brcs_ddm_peak_bin_delay_row[sec][
                 ngrx_channel
@@ -1093,6 +1106,9 @@ for sec in range(len(transmitter_id)):
     print(
         f"******** finish processing part 4B {sec} second data with {timer() - t0}********"
     )
+    print("specular bin: ", tn)
+    print("local dem   : ", tnn)
+    print("aeff ddm    : ", tnnn)
 
 # extend to RHCP channels
 brcs_ddm_peak_bin_delay_row[:, J_2:J] = brcs_ddm_peak_bin_delay_row[:, 0:J_2]
