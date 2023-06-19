@@ -73,12 +73,14 @@ def L1a_counts2watts(ddm_counts, ANZ_port, std_dev):
     # Scipy doesn't like masked arrays, so undo here and reply after
     ddm_power_dbm = L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts_db))
     ddm_power_dbm = (
-        ddm_power_dbm + std_dev_db_ch - binning_thres_db[ANZ_port]  # + cable_loss_db_ch
+        ddm_power_dbm
+        + std_dev_db_ch
+        - binning_thres_db[ANZ_port]  # cable loss to be compensated when computing BRCS
     )
     # ? reapply mask to array to hide nonsense interp.
     # ? ddm_power_dbm = np.ma.masked_where(np.ma.getmask(ddm_counts_db), ddm_power_dbm)
-    # convert to watts (TODO - why 30?)
-    return 10 ** ((ddm_power_dbm - 30) / 10)
+    # convert to watts, 9 dB difference from L1a
+    return 10 ** ((ddm_power_dbm - 30 - 9) / 10)
 
 
 def ddm_calibration(

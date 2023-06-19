@@ -25,6 +25,7 @@ from load_files import (
     get_surf_type2,
     get_local_dem,
     write_netcdf,
+    load_A_phy_LUT,
 )
 from specular import (
     sp_solver,
@@ -260,9 +261,12 @@ RHCP_pattern = {
 }
 
 # load physical scattering area LUT
-phy_ele_filename = Path("phy_ele_size.dat")  # same path as DEM
-phy_ele_size = np.loadtxt(dem_path.joinpath(phy_ele_filename))
+# phy_ele_filename = Path("phy_ele_size.dat")  # same path as DEM
+# phy_ele_size = np.loadtxt(dem_path.joinpath(phy_ele_filename))
 
+# scattering area LUT
+A_phy_LUT_path = "./dat/A_phy_LUT/A_phy_LUT.dat"
+A_phy_LUT_all = load_A_phy_LUT(A_phy_LUT_path)
 
 ### ---------------------- Part 1: General processing
 # This part derives global constants, timestamps, and all the other
@@ -1081,9 +1085,7 @@ for sec in range(len(transmitter_id)):
 
             tnn += timer() - tnn1
             tnnn1 = timer()
-            A_eff1, A_eff_all1 = get_ddm_Aeff(
-                tx1, rx1, sx1, local_dem1, phy_ele_size, chi2
-            )
+            A_eff1, A_eff_all1 = get_ddm_Aeff(tx1, rx1, sx1, local_dem1, chi2)
 
             tnnn += timer() - tnnn1
             # save to variables

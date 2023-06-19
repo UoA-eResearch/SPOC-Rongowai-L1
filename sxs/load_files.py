@@ -101,6 +101,53 @@ def load_antenna_pattern(filepath):
     return np.reshape(ant_data, (-1, 3601))
 
 
+# load antenna binary files
+def load_A_phy_LUT(filepath):
+    """This function retrieves A_phy LUT and the input matrices
+
+    Parameters
+    ----------
+    filepath : pathlib.Path
+        path to file
+
+    Returns
+    -------
+    rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all
+    """
+    with open(filepath, "rb") as f:
+        min_rx_alt = load_dat_file(f, "H", 1)  # uint16
+        res_rx_alt = load_dat_file(f, "H", 1)
+        num_rx_alt = load_dat_file(f, "H", 1)
+
+        min_inc_angle = load_dat_file(f, "H", 1)
+        res_inc_angle = load_dat_file(f, "H", 1)
+        num_inc_angle = load_dat_file(f, "H", 1)
+
+        min_az_angle = load_dat_file(f, "H", 1)
+        res_az_angle = load_dat_file(f, "H", 1)
+        num_az_angle = load_dat_file(f, "H", 1)
+
+        rx_alt_bins = (np.asarray(range(num_rx_alt)) * res_rx_alt) + min_rx_alt
+        inc_angle_bins = (
+            np.asarray(range(num_inc_angle)) * res_inc_angle
+        ) + min_inc_angle
+        az_angle_bins = (np.asarray(range(num_az_angle)) * res_az_angle) + min_az_angle
+
+        A_phy_LUT_all = np.full(
+            [num_rx_alt, num_inc_angle, num_az_angle, 7, 41], np.nan
+        )
+
+        for m in range(num_rx_alt):
+            for n in range(num_inc_angle):
+                for k in range(num_az_angle):
+                    data = np.reshape(
+                        load_dat_file(f, "I", 7 * 41), (41, 7)
+                    ).T  # uint32
+                    A_phy_LUT_all[m, n, k] = data
+
+    return rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all
+
+
 # calculate which orbit file to load
 # TODO automate retrieval of orbit files for new days
 def get_orbit_file(gps_week, gps_tow, start_obj, end_obj, change_idx=0):
@@ -238,52 +285,52 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
     return {"lat": local_lat, "lon": local_lon, "ele": local_ele}
 
 
-def get_local_dem_new(P, L, res, dem_data, dtu_model, dist_to_coast):
-    """
-    this function outputs the local DEM data around the local coordinate P
-    P - LLA coordinate
-    """
-    ocean_land_margin = 0
-    lat_P = P[0]
-    lon_P = P[1]
+# def get_local_dem_new(P, L, res, dem_data, dtu_model, dist_to_coast):
+#     """
+#     this function outputs the local DEM data around the local coordinate P
+#     P - LLA coordinate
+#     """
+#     ocean_land_margin = 0
+#     lat_P = P[0]
+#     lon_P = P[1]
 
-    num_pixels = int(L / res)
-    half_num_pixel = math.floor(num_pixels / 2)
+#     num_pixels = int(L / res)
+#     half_num_pixel = math.floor(num_pixels / 2)
 
-    # sparse dem structures
-    lat = dem_data["lat"]
-    lon = dem_data["lon"]
-    ele = dem_data["ele"]
+#     # sparse dem structures
+#     lat = dem_data["lat"]
+#     lon = dem_data["lon"]
+#     ele = dem_data["ele"]
 
-    lat_index = np.argmin(np.abs(lat - lat_P))
-    lon_index = np.argmin(np.abs(lon - lon_P))
+#     lat_index = np.argmin(np.abs(lat - lat_P))
+#     lon_index = np.argmin(np.abs(lon - lon_P))
 
-    local_lat = lat[lat_index - half_num_pixel : lat_index + half_num_pixel + 1]
-    local_lon = lon[lon_index - half_num_pixel : lon_index + half_num_pixel + 1]
+#     local_lat = lat[lat_index - half_num_pixel : lat_index + half_num_pixel + 1]
+#     local_lon = lon[lon_index - half_num_pixel : lon_index + half_num_pixel + 1]
 
-    if dist_to_coast > ocean_land_margin:
-        local_ele = ele[
-            lat_index - half_num_pixel : lat_index + half_num_pixel + 1,
-            lon_index - half_num_pixel : lon_index + half_num_pixel + 1,
-        ]
-    else:
-        local_ele = np.zeros([num_pixels, num_pixels])
-        for i in range(num_pixels):
-            for j in range(num_pixels):
-                pixel_lat = local_lat[i]
-                pixel_lon = local_lon[j]
-                pixel_ele = interpn(
-                    points=(dtu_model["lon"], dtu_model["lat"]),
-                    values=dtu_model["ele"],
-                    xi=(pixel_lon, pixel_lat),
-                    method="linear",
-                )
-                # pixel_ele = get_map_value(pixel_lat, pixel_lon, dtu_model)
-                local_ele[i, j] = pixel_ele
+#     if dist_to_coast > ocean_land_margin:
+#         local_ele = ele[
+#             lat_index - half_num_pixel : lat_index + half_num_pixel + 1,
+#             lon_index - half_num_pixel : lon_index + half_num_pixel + 1,
+#         ]
+#     else:
+#         local_ele = np.zeros([num_pixels, num_pixels])
+#         for i in range(num_pixels):
+#             for j in range(num_pixels):
+#                 pixel_lat = local_lat[i]
+#                 pixel_lon = local_lon[j]
+#                 pixel_ele = interpn(
+#                     points=(dtu_model["lon"], dtu_model["lat"]),
+#                     values=dtu_model["ele"],
+#                     xi=(pixel_lon, pixel_lat),
+#                     method="linear",
+#                 )
+#                 # pixel_ele = get_map_value(pixel_lat, pixel_lon, dtu_model)
+#                 local_ele[i, j] = pixel_ele
 
-    local_dem = {"lat": local_lat, "lon": local_lon, "ele": local_ele.astype("double")}
+#     local_dem = {"lat": local_lat, "lon": local_lon, "ele": local_ele.astype("double")}
 
-    return local_dem
+#     return local_dem
 
 
 def get_landcover_type2(lat_P, lon_P, lcv_mask):
