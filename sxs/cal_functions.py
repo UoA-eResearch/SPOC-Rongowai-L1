@@ -95,15 +95,6 @@ def ddm_calibration(
     ddm_power_counts,
     power_analog,
     ddm_ant,
-    ddm_noise_counts,
-    ddm_noise_watts,
-    peak_ddm_counts,
-    peak_ddm_watts,
-    peak_delay_bin,
-    noise_floor_counts,
-    noise_floor,
-    inst_gain,
-    snr_db,
 ):
     """Calibrates raw DDMs into power DDMs in Watts
 
@@ -131,24 +122,6 @@ def ddm_calibration(
         Empty 4D array to recieve calibrated powers of DDMs in Watts
     ddm_ant : numpy.array()
         Empty array to receive ANZ_port of each DDM
-    ddm_noise_counts : numpy.array()
-        Empty array to receive estimate of noise per DDM
-    ddm_noise_watts : numpy.array()
-        Empty array to receive estimate of noise per DDM in Watts
-    peak_ddm_counts : numpy.array()
-        Empty array to receive maximum counts per calibrated DDM
-    peak_ddm_watts : numpy.array()
-        Empty array to receive maximum Power per calibrated DDM in Watts
-    peak_delay_bin : numpy.array()
-        Empty array to receive delay_bin of peak count value per calibrated DDM
-    noise_floor_counts : numpy.array()
-        Empty array to receive noise floor per calibrated DDM
-    noise_floor : numpy.array()
-        Empty array to receive noise floor per calibrated DDM in Watts
-    inst_gain : numpy.array()
-        Empty array to receive instantaneous gain per calibrated DDM
-    snr_db : numpy.array()
-        Empty array to receive SNR per calibrated DDM in dB
     """
     # TODO - what to do about partial DDMs?
     # derive signal power
@@ -190,110 +163,20 @@ def ddm_calibration(
                 std_dev1,
             )
 
-            # noise floor in counts for each DDM
-            # determine noise counts from offset value
-            ddm_noise_counts1 = np.mean(ddm_power_counts1[-offset - 1 :, :])
-            ddm_noise_watts1 = L1a_counts2watts(
-                ddm_noise_counts1,
-                ANZ_port1,
-                std_dev1,
-            )
-
             # peak ddm location
             # find peak counts/watts/delay from DDM data
-            peak_ddm_counts1 = np.max(ddm_power_counts1)
+            peak_counts1 = np.max(ddm_power_counts1)
             # 0-based index
-            peak_delay_bin1 = np.where(ddm_power_counts1 == peak_ddm_counts1)[0][0]
+            peak_delay_bin1 = np.where(ddm_power_counts1 == peak_counts1)[0][0]
+            peak_power1 = np.max(ddm_power_watts1)
 
-            peak_ddm_watts1 = np.max(ddm_power_watts1)
+            inst_gain1 = peak_counts1 / peak_power1
 
             # save variables
             ddm_power_counts[sec][ngrx_channel] = ddm_power_counts1
             power_analog[sec][ngrx_channel] = ddm_power_watts1
             # 0-based index
             ddm_ant[sec][ngrx_channel] = ANZ_port1
-            ddm_noise_counts[sec][ngrx_channel] = ddm_noise_counts1
-            ddm_noise_watts[sec][ngrx_channel] = ddm_noise_watts1
-
-            peak_ddm_counts[sec][ngrx_channel] = peak_ddm_counts1
-            peak_ddm_watts[sec][ngrx_channel] = peak_ddm_watts1
-            # this is 0-based
-            peak_delay_bin[sec][ngrx_channel] = peak_delay_bin1
-
-    # derive noise floor, SNR and instrument gain
-    for sec in range(len(std_dev_rf1)):
-        noise_counts_LHCP1 = ddm_noise_counts[sec, 0 : int(J / 2)]
-        noise_watts_LHCP1 = ddm_noise_watts[sec, 0 : int(J / 2)]
-        peak_delay_bin_LHCP1 = peak_delay_bin[sec, 0 : int(J / 2)]
-
-        noise_counts_RHCP1 = ddm_noise_counts[sec, int(J / 2) : J]
-        noise_watts_RHCP1 = ddm_noise_watts[sec, int(J / 2) : J]
-        peak_delay_bin_RHCP1 = peak_delay_bin[sec, int(J / 2) : J]
-
-        # TODO Q: why is 31?
-        noise_index_LHCP = np.where(
-            np.logical_and(peak_delay_bin_LHCP1 < 31, peak_delay_bin_LHCP1 > 0)
-        )[0]
-        noise_index_RHCP = np.where(
-            np.logical_and(peak_delay_bin_RHCP1 < 31, peak_delay_bin_RHCP1 > 0)
-        )[0]
-
-        if len(noise_index_LHCP) > 0:
-            avg_noise_counts_LHCP1 = np.mean(noise_counts_LHCP1[noise_index_LHCP])
-            avg_noise_watts_LHCP1 = np.mean(noise_watts_LHCP1[noise_index_LHCP])
-
-            avg_noise_counts_RHCP1 = np.mean(noise_counts_RHCP1[noise_index_RHCP])
-            avg_noise_watts_RHCP1 = np.mean(noise_watts_RHCP1[noise_index_RHCP])
-
-        elif (len(noise_index_LHCP) == 0) and (np.any(~np.isnan(noise_counts_LHCP1))):
-            # TODO Q: the index operation is strange, j (ngrx_channel) is out of loops.
-            avg_noise_counts_LHCP1 = noise_floor_counts[sec - 1, ngrx_channel]
-            avg_noise_watts_LHCP1 = noise_floor[sec - 1, ngrx_channel]
-
-            avg_noise_counts_RHCP1 = noise_floor_counts[
-                sec - 1, ngrx_channel + int(J / 2)
-            ]
-            avg_noise_watts_RHCP1 = noise_floor[sec - 1, ngrx_channel + int(J / 2)]
-
-        for ngrx_channel in range(int(J / 2)):
-            peak_power_counts_LHCP1 = peak_ddm_counts[sec, ngrx_channel]
-            peak_signal_watts_LHCP1 = peak_ddm_watts[sec, ngrx_channel]
-
-            peak_power_counts_RHCP1 = peak_ddm_counts[sec, ngrx_channel + int(J / 2)]
-            peak_signal_watts_RHCP1 = peak_ddm_watts[sec, ngrx_channel + int(J / 2)]
-
-            if not math.isnan(peak_power_counts_LHCP1):
-                # derive SNR
-                snr_LHCP1 = peak_signal_watts_LHCP1 / avg_noise_watts_LHCP1
-                snr_db_LHCP1 = power2db(snr_LHCP1)
-                snr_RHCP1 = peak_signal_watts_RHCP1 / avg_noise_watts_RHCP1
-                snr_db_RHCP1 = power2db(snr_RHCP1)
-
-                # derive instrument gain
-                peak_signal_counts_LHCP1 = (
-                    peak_power_counts_LHCP1 - avg_noise_counts_LHCP1
-                )
-                inst_gain_LHCP1 = peak_signal_counts_LHCP1 / peak_signal_watts_LHCP1
-
-                peak_signal_counts_RHCP1 = (
-                    peak_power_counts_RHCP1 - avg_noise_counts_RHCP1
-                )
-                inst_gain_RHCP1 = peak_signal_counts_RHCP1 / peak_signal_watts_RHCP1
-
-                # save variables
-                noise_floor_counts[sec, ngrx_channel] = avg_noise_counts_LHCP1
-                noise_floor_counts[
-                    sec, ngrx_channel + int(J / 2)
-                ] = avg_noise_counts_RHCP1
-
-                noise_floor[sec, ngrx_channel] = avg_noise_watts_LHCP1
-                noise_floor[sec, ngrx_channel + int(J / 2)] = avg_noise_watts_RHCP1
-
-                inst_gain[sec, ngrx_channel] = inst_gain_LHCP1
-                inst_gain[sec, ngrx_channel + int(J / 2)] = inst_gain_RHCP1
-
-                snr_db[sec, ngrx_channel] = snr_db_LHCP1
-                snr_db[sec, ngrx_channel + int(J / 2)] = snr_db_RHCP1
 
 
 def get_quality_flag(quality_flag1):

@@ -860,6 +860,10 @@ def get_specular_bin(tx, rx, sx, ddm):
     return specular_bin, zenith_code_phase, confidence_flag
 
 
+def get_ddm_Aeff4():
+
+    return True
+
 def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
     """
     this function computes the effective scattering area at the given surface

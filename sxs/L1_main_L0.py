@@ -33,7 +33,7 @@ from specular import (
     get_sx_rx_gain,
     get_chi2,
     get_specular_bin,
-    get_ddm_Aeff,
+    get_ddm_Aeff4,
     ddm_brcs,
     get_ddm_nbrcs2,
     ddm_refl,
@@ -181,6 +181,8 @@ assert (
 #
 # TODO: Additional processing if ddm- and rx- related varaibles aren't the same length
 #
+
+integration_duration = coherent_duration * non_coherent_integrations * 1000
 
 # temperatures from engineering data
 eng_timestamp = eng_timestamp.compressed()
@@ -548,17 +550,6 @@ L1_postCal["track_id"] = track_id
 ddm_power_counts = np.full([*raw_counts.shape], np.nan)
 power_analog = np.full([*raw_counts.shape], np.nan)
 
-noise_floor_counts = np.full([*transmitter_id.shape], np.nan)
-noise_floor = np.full([*transmitter_id.shape], np.nan)
-snr_db = np.full([*transmitter_id.shape], np.nan)
-
-peak_ddm_counts = np.full([*transmitter_id.shape], np.nan)
-peak_ddm_watts = np.full([*transmitter_id.shape], np.nan)
-peak_delay_bin = np.full([*transmitter_id.shape], np.nan)
-
-ddm_noise_counts = np.full([*transmitter_id.shape], np.nan)
-ddm_noise_watts = np.full([*transmitter_id.shape], np.nan)
-
 ddm_ant = np.full([*transmitter_id.shape], np.nan)
 inst_gain = np.full([*transmitter_id.shape], np.nan)
 
@@ -575,15 +566,6 @@ ddm_calibration(
     ddm_power_counts,
     power_analog,
     ddm_ant,
-    ddm_noise_counts,
-    ddm_noise_watts,
-    peak_ddm_counts,
-    peak_ddm_watts,
-    peak_delay_bin,
-    noise_floor_counts,
-    noise_floor,
-    inst_gain,
-    snr_db,
 )
 
 # save outputs to L1 structure
@@ -591,13 +573,10 @@ L1_postCal["raw_counts"] = ddm_power_counts
 L1_postCal["l1a_power_ddm"] = power_analog
 L1_postCal["zenith_sig_i2q2"] = zenith_i2q2  # read from file
 
-L1_postCal["ddm_noise_floor"] = noise_floor
-L1_postCal["ddm_snr"] = snr_db
-
 L1_postCal["inst_gain"] = inst_gain
 L1_postCal["ddm_ant"] = ddm_ant  # 0-based
 
-"""
+
 #   # --------------------- Part 4A: SP solver and geometries
 # initialise variables
 # initialise a huge amount of empty arrays
@@ -634,8 +613,6 @@ sx_az_enu = np.full([*transmitter_id.shape], np.nan)
 gps_tx_power_db_w = np.full([*transmitter_id.shape], np.nan)
 gps_ant_gain_db_i = np.full([*transmitter_id.shape], np.nan)
 static_gps_eirp = np.full([*transmitter_id.shape], np.nan)
-
-sx_rx_gain = np.full([*transmitter_id.shape], np.nan)
 
 sx_rx_gain_copol = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
@@ -787,12 +764,16 @@ for sec in range(len(transmitter_id)):
                 gps_ant_gain_db_i[sec, ngrx_channel] = gps_rad1[1]
                 static_gps_eirp[sec, ngrx_channel] = gps_rad1[2]
 
-                sx_rx_gain[sec, ngrx_channel] = sx_rx_gain_LHCP1[
-                    0
-                ]  # LHCP channel rx gain
-                sx_rx_gain[sec, ngrx_channel + J_2] = sx_rx_gain_RHCP1[
-                    1
-                ]  # RHCP channel rx gain
+                # copol gain
+                # LHCP channel rx gain
+                sx_rx_gain_copol[sec, ngrx_channel] = sx_rx_gain_LHCP1[0]
+                # RHCP channel rx gain
+                sx_rx_gain_copol[sec, ngrx_channel + J_2] = sx_rx_gain_RHCP1[1]
+                # xpol gain gain
+                # LHCP channel rx gain
+                sx_rx_gain_xpol[sec, ngrx_channel] = sx_rx_gain_LHCP1[1]
+                # RHCP channel rx gain
+                sx_rx_gain_xpol[sec, ngrx_channel + J_2] = sx_rx_gain_RHCP1[0]
     print(
         f"******** start processing part 4A {sec} second data with {timer() - t0} ********"
     )
@@ -861,7 +842,8 @@ L1_postCal["sp_az_body"] = sx_az_body  # checked value diff < 0.01
 L1_postCal["sp_theta_enu"] = sx_theta_enu  # checked value diff < 0.1 / e2
 L1_postCal["sp_az_enu"] = sx_az_enu  # checked ok
 
-L1_postCal["sp_rx_gain"] = sx_rx_gain  # checked ok
+L1_postCal["sp_rx_gain_copol"] = sx_rx_gain_copol
+L1_postCal["sp_rx_gain_xpol"] = sx_rx_gain_xpol
 
 L1_postCal["gps_off_boresight_angle_deg"] = gps_boresight  # checked ok
 
@@ -874,68 +856,68 @@ L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
 #
 # np.save('debug.npy', L1_postCal) """
 #
-L1_postCal_loaded = np.load("debug.npy", allow_pickle=True).item()
-##############
+# L1_postCal_loaded = np.load("debug.npy", allow_pickle=True).item()
+# ##############
 
 
-def dic_to_keys_values(dic):
-    keys, values = list(dic.keys()), list(dic.values())
-    return keys, values
+# def dic_to_keys_values(dic):
+#     keys, values = list(dic.keys()), list(dic.values())
+#     return keys, values
 
 
-#
-#
-def numpy_assert_almost_dict_values(dict1, dict2):
-    keys1, values1 = dic_to_keys_values(dict1)
-    keys2, values2 = dic_to_keys_values(dict2)
-    np.testing.assert_equal(keys1, keys2)
-    np.testing.assert_equal(values1, values2)
+# #
+# #
+# def numpy_assert_almost_dict_values(dict1, dict2):
+#     keys1, values1 = dic_to_keys_values(dict1)
+#     keys2, values2 = dic_to_keys_values(dict2)
+#     np.testing.assert_equal(keys1, keys2)
+#     np.testing.assert_equal(values1, values2)
 
 
-#
-#
-# numpy_assert_almost_dict_values(L1_postCal, L1_postCal_loaded)
-##############
+# #
+# #
+# # numpy_assert_almost_dict_values(L1_postCal, L1_postCal_loaded)
+# ##############
 
-L1_postCal = np.load("debug.npy", allow_pickle=True).item()
+# L1_postCal = np.load("debug.npy", allow_pickle=True).item()
 
-sx_pos_x = L1_postCal["sp_pos_x"]
-sx_pos_y = L1_postCal["sp_pos_y"]
-sx_pos_z = L1_postCal["sp_pos_z"]
-#
-sx_lat = L1_postCal["sp_lat"]
-sx_lon = L1_postCal["sp_lon"]
-sx_alt = L1_postCal["sp_alt"]
-#
-sx_vel_x = L1_postCal["sp_vel_x"]
-sx_vel_y = L1_postCal["sp_vel_y"]
-sx_vel_z = L1_postCal["sp_vel_z"]
-#
-surface_type = L1_postCal["sp_surface_type"]
-dist_to_coast_km = L1_postCal["sp_dist_to_coast_km"]
-LOS_flag = L1_postCal["LOS_flag"]
-#
-rx_to_sp_range = L1_postCal["rx_to_sp_range"]
-tx_to_sp_range = L1_postCal["tx_to_sp_range"]
-#
-sx_inc_angle = L1_postCal["sp_inc_angle"]
-sx_d_snell_angle = L1_postCal["sp_d_snell_angle"]
-#
-sx_theta_body = L1_postCal["sp_theta_body"]
-sx_az_body = L1_postCal["sp_az_body"]
-sx_theta_enu = L1_postCal["sp_theta_enu"]
-sx_az_enu = L1_postCal["sp_az_enu"]
-#
-sx_rx_gain = L1_postCal["sp_rx_gain"]
-#
-gps_boresight = L1_postCal["gps_off_boresight_angle_deg"]
-#
-static_gps_eirp = L1_postCal["static_gps_eirp"]
-gps_tx_power_db_w = L1_postCal["gps_tx_power_db_w"]
-gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
+# sx_pos_x = L1_postCal["sp_pos_x"]
+# sx_pos_y = L1_postCal["sp_pos_y"]
+# sx_pos_z = L1_postCal["sp_pos_z"]
+# #
+# sx_lat = L1_postCal["sp_lat"]
+# sx_lon = L1_postCal["sp_lon"]
+# sx_alt = L1_postCal["sp_alt"]
+# #
+# sx_vel_x = L1_postCal["sp_vel_x"]
+# sx_vel_y = L1_postCal["sp_vel_y"]
+# sx_vel_z = L1_postCal["sp_vel_z"]
+# #
+# surface_type = L1_postCal["sp_surface_type"]
+# dist_to_coast_km = L1_postCal["sp_dist_to_coast_km"]
+# LOS_flag = L1_postCal["LOS_flag"]
+# #
+# rx_to_sp_range = L1_postCal["rx_to_sp_range"]
+# tx_to_sp_range = L1_postCal["tx_to_sp_range"]
+# #
+# sx_inc_angle = L1_postCal["sp_inc_angle"]
+# sx_d_snell_angle = L1_postCal["sp_d_snell_angle"]
+# #
+# sx_theta_body = L1_postCal["sp_theta_body"]
+# sx_az_body = L1_postCal["sp_az_body"]
+# sx_theta_enu = L1_postCal["sp_theta_enu"]
+# sx_az_enu = L1_postCal["sp_az_enu"]
+# #
+# sx_rx_gain = L1_postCal["sp_rx_gain"]
+# #
+# gps_boresight = L1_postCal["gps_off_boresight_angle_deg"]
+# #
+# static_gps_eirp = L1_postCal["static_gps_eirp"]
+# gps_tx_power_db_w = L1_postCal["gps_tx_power_db_w"]
+# gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
 
-##############
-
+# ##############
+"""
 # -------------------- Part 4B: BRCS/NBRCS, reflectivity, coherent status and fresnel zone
 # initialise variables
 brcs_ddm_peak_bin_delay_row = np.full([*transmitter_id.shape], np.nan)
@@ -1085,7 +1067,7 @@ for sec in range(len(transmitter_id)):
 
             tnn += timer() - tnn1
             tnnn1 = timer()
-            A_eff1, A_eff_all1 = get_ddm_Aeff(tx1, rx1, sx1, local_dem1, chi2)
+            A_eff1, A_eff_all1 = get_ddm_Aeff4(tx1, rx1, sx1, local_dem1, chi2)
 
             tnnn += timer() - tnnn1
             # save to variables
@@ -1550,3 +1532,4 @@ output_file = "./out/sample1.nc"
 write_netcdf(L1_postCal, definition_file, output_file)
 
 # L1 calibration ends
+"""
