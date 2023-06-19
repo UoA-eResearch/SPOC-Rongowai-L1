@@ -970,6 +970,8 @@ delay_offset = 4
 
 # derive floating SP bin location and effective scattering area A_eff
 for sec in range(len(transmitter_id)):
+    t0 = timer()
+
     # retrieve rx positions and velocities
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
     rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
