@@ -35,6 +35,7 @@ LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
 def load_netcdf(netcdf_variable):
     """Unpack netcdf variable to python variable.
        Removes masked rows from 1D, 2D, & 4D NetCDF variables.
+       The masks smuggle NaN values into the code which throw off things.
     Parameters
     ----------
     netcdf4.variable
@@ -44,17 +45,15 @@ def load_netcdf(netcdf_variable):
     -------
     netcdf_variable as N-D numpy.array
     """
-    # if len(netcdf_variable.shape[:]) == 1:
-    #     return netcdf_variable[:].compressed()
-    # if len(netcdf_variable.shape[:]) == 2:
-    #     return np.ma.compress_rows(np.ma.masked_invalid(netcdf_variable[:]))
-    # if len(netcdf_variable.shape[:]) == 4:
-    #     # note: this results in a masked array that needs special treatment
-    #     # before use with scipy
-    #     count_mask = ~netcdf_variable[:, 0, 0, 0].mask
-    #     return netcdf_variable[count_mask, :, :, :]
-    print(f"read variable {netcdf_variable}, \ndimensions is {netcdf_variable.shape}")
-    return netcdf_variable[:]
+    if len(netcdf_variable.shape[:]) == 1:
+        return netcdf_variable[:].compressed()
+    if len(netcdf_variable.shape[:]) == 2:
+        return np.ma.compress_rows(np.ma.masked_invalid(netcdf_variable[:]))
+    if len(netcdf_variable.shape[:]) == 4:
+        # note: this results in a masked array that needs special treatment
+        # before use with scipy
+        count_mask = ~netcdf_variable[:, 0, 0, 0].mask
+        return netcdf_variable[count_mask, :, :, :]
 
 
 # function to load a specified type of binary data from  file

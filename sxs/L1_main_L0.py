@@ -93,16 +93,18 @@ std_dev_rf1 = load_netcdf(L0_dataset["/science/ddm/RF1_zenith_RHCP_std_dev"])
 std_dev_rf2 = load_netcdf(L0_dataset["/science/ddm/RF2_nadir_LHCP_std_dev"])
 std_dev_rf3 = load_netcdf(L0_dataset["/science/ddm/RF3_nadir_RHCP_std_dev"])
 
-delay_bin_res = load_netcdf(
-    L0_dataset["/science/ddm/delay_bin_res_narrow"]
-)  # delay bin resolution
-doppler_bin_res = load_netcdf(
-    L0_dataset["/science/ddm/doppler_bin_res_narrow"]
-)  # doppler bin resolution
+# delay bin resolution
+delay_bin_res = load_netcdf(L0_dataset["/science/ddm/delay_bin_res_narrow"])
+delay_bin_res = delay_bin_res[~np.isnan(delay_bin_res)][0]
+# doppler bin resolution
+doppler_bin_res = load_netcdf(L0_dataset["/science/ddm/doppler_bin_res_narrow"])
+doppler_bin_res = doppler_bin_res[~np.isnan(doppler_bin_res)][0]
 
 # delay and Doppler center bin
-center_delay_bin = load_netcdf(L0_dataset["/science/ddm/ddm_center_delay_bin"])[0]
-center_doppler_bin = load_netcdf(L0_dataset["/science/ddm/ddm_center_doppler_bin"])[0]
+center_delay_bin = load_netcdf(L0_dataset["/science/ddm/ddm_center_delay_bin"])
+center_delay_bin = center_delay_bin[~np.isnan(center_delay_bin)][0]
+center_doppler_bin = load_netcdf(L0_dataset["/science/ddm/ddm_center_doppler_bin"])
+center_doppler_bin = center_doppler_bin[~np.isnan(center_doppler_bin)][0]
 
 # absolute ddm center delay and doppler
 delay_center_chips = load_netcdf(L0_dataset["/science/ddm/center_delay_bin_code_phase"])
@@ -110,12 +112,10 @@ doppler_center_hz = load_netcdf(L0_dataset["/science/ddm/center_doppler_bin_freq
 
 # coherent duration and noncoherent integration
 coherent_duration = (
-    # xcai load_netcdf(L0_dataset["/science/ddm/L1_E1_coherent_duration"]) / 1000
-    load_netcdf(L0_dataset["/science/ddm/L1_E1_coherent_duration"])
+    load_netcdf(L0_dataset["/science/ddm/L1_E1_coherent_duration"]) / 1000
 )
 non_coherent_integrations = (
-    # xcai load_netcdf(L0_dataset["/science/ddm/L1_E1_non_coherent_integrations"]) / 1000
-    load_netcdf(L0_dataset["/science/ddm/L1_E1_non_coherent_integrations"])
+    load_netcdf(L0_dataset["/science/ddm/L1_E1_non_coherent_integrations"]) / 1000
 )
 
 # NGRx estimate additional delay path
@@ -129,54 +129,8 @@ nadir_ant_temp_eng = load_netcdf(L0_dataset["/eng/nadir_ant_temp"])
 
 ### ---------------------- Prelaunch 1.5: Filter valid timestampes
 
-
-# rx-related variables
-
-pvt_gps_week = pvt_gps_week.compressed()
-pvt_gps_sec = pvt_gps_sec.compressed()
-
-rx_pos_x_pvt = rx_pos_x_pvt.compressed()
-rx_pos_y_pvt = rx_pos_y_pvt.compressed()
-rx_pos_z_pvt = rx_pos_z_pvt.compressed()
-
-rx_vel_x_pvt = rx_vel_x_pvt.compressed()
-rx_vel_y_pvt = rx_vel_y_pvt.compressed()
-rx_vel_z_pvt = rx_vel_z_pvt.compressed()
-
-rx_roll_pvt = rx_roll_pvt.compressed()
-rx_pitch_pvt = rx_pitch_pvt.compressed()
-rx_yaw_pvt = rx_yaw_pvt.compressed()
-
-rx_clk_bias_m_pvt = rx_clk_bias_m_pvt.compressed()
-rx_clk_drift_mps_pvt = rx_clk_drift_mps_pvt.compressed()
-
 # identify and compensate the value equal to 0 (randomly happens)
 assert not (pvt_gps_week == 0).any(), "pvt_gps_week contains 0, need to compensate."
-
-# ddm-related variables
-transmitter_id = np.ma.compress_rows(np.ma.masked_invalid(transmitter_id))
-
-first_scale_factor = np.ma.compress_rows(np.ma.masked_invalid(first_scale_factor))
-raw_counts = raw_counts[~raw_counts[:, 0, 0, 0].mask, :, :, :]
-zenith_i2q2 = np.ma.compress_rows(np.ma.masked_invalid(zenith_i2q2))
-
-rf_source = np.ma.compress_rows(np.ma.masked_invalid(rf_source))
-
-std_dev_rf1 = std_dev_rf1.compressed()
-std_dev_rf2 = std_dev_rf2.compressed()
-std_dev_rf3 = std_dev_rf3.compressed()
-
-# absolute ddm center delay and doppler
-delay_center_chips = np.ma.compress_rows(np.ma.masked_invalid(delay_center_chips))
-doppler_center_hz = np.ma.compress_rows(np.ma.masked_invalid(doppler_center_hz))
-
-# coherent duration and noncoherent integration
-coherent_duration = coherent_duration.compressed() / 1000  # convert to seconds
-non_coherent_integrations = non_coherent_integrations.compressed() / 1000
-
-
-# NGRx estimate additional delay path
-add_range_to_sp_pvt = np.ma.compress_rows(np.ma.masked_invalid(add_range_to_sp_pvt))
 
 # the below is to process when ddm-related and rx-related variables do not
 # have the same length, which happens for some of the L0 products
@@ -188,11 +142,6 @@ assert (
 #
 
 integration_duration = coherent_duration * non_coherent_integrations * 1000
-
-# temperatures from engineering data
-eng_timestamp = eng_timestamp.compressed()
-nadir_ant_temp_eng = nadir_ant_temp_eng.compressed()
-zenith_ant_temp_eng = zenith_ant_temp_eng.compressed()
 
 
 ### ---------------------- Prelaunch 2 - define external data paths and filenames
@@ -232,18 +181,18 @@ lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 # process inland water mask
 pek_path = Path().absolute().joinpath(Path("./dat/pek/"))
 
-water_mask = {}
-for path in [
-    "160E_40S",
-    "170E_30S",
-    "170E_40S",
-]:
-    water_mask[path] = {}
-    pek_file = rasterio.open(pek_path.joinpath("occurrence_" + path + ".tif"))
-    water_mask[path]["lon_min"] = pek_file._transform[0]
-    water_mask[path]["res_deg"] = pek_file._transform[1]
-    water_mask[path]["lat_max"] = pek_file._transform[3]
-    water_mask[path]["data"] = pek_file.read(1)
+# water_mask = {}
+# for path in [
+#     "160E_40S",
+#     "170E_30S",
+#     "170E_40S",
+# ]:
+#     water_mask[path] = {}
+#     pek_file = rasterio.open(pek_path.joinpath("occurrence_" + path + ".tif"))
+#     water_mask[path]["lon_min"] = pek_file._transform[0]
+#     water_mask[path]["res_deg"] = pek_file._transform[1]
+#     water_mask[path]["lat_max"] = pek_file._transform[3]
+#     water_mask[path]["data"] = pek_file.read(1)
 
 # load PRN-SV and SV-EIRP(static) LUT
 gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
@@ -914,7 +863,7 @@ sx_az_body = L1_postCal["sp_az_body"]
 sx_theta_enu = L1_postCal["sp_theta_enu"]
 sx_az_enu = L1_postCal["sp_az_enu"]
 # #
-sx_rx_gain = L1_postCal["sp_rx_gain"]
+# sx_rx_gain = L1_postCal["sp_rx_gain"]
 # #
 gps_boresight = L1_postCal["gps_off_boresight_angle_deg"]
 # #
@@ -922,6 +871,8 @@ static_gps_eirp = L1_postCal["static_gps_eirp"]
 gps_tx_power_db_w = L1_postCal["gps_tx_power_db_w"]
 gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
 
+sx_rx_gain_copol = L1_postCal["sp_rx_gain_copol"]
+sx_rx_gain_xpol = L1_postCal["sp_rx_gain_xpol"]
 # ##############
 
 # -------------------- Part 4B: BRCS/NBRCS, reflectivity, coherent status and fresnel zone
@@ -938,13 +889,12 @@ sp_doppler_error = np.full([*transmitter_id.shape], np.nan)
 zenith_code_phase = np.full([*transmitter_id.shape], np.nan)
 
 noise_floor_all_LHCP = np.full([transmitter_id.shape[0], J_2], np.nan)
-noise_floor_all_RHCP = np.full([*transmitter_id.shape[0], J_2], np.nan)
+noise_floor_all_RHCP = np.full([transmitter_id.shape[0], J_2], np.nan)
 
 # brcs = np.full([*transmitter_id.shape, 40, 5], np.nan)
 # A_eff = np.full([*transmitter_id.shape, 40, 5], np.nan)
 # A_eff_all = np.full([*transmitter_id.shape, 79, 9], np.nan)  # debug only
 
-# norm_refl_waveform = np.full([*transmitter_id.shape, 40, 1], np.nan)
 
 # nbrcs_scatter_area_v1 = np.full([*transmitter_id.shape], np.nan)
 # ddm_nbrcs_v1 = np.full([*transmitter_id.shape], np.nan)
@@ -968,10 +918,9 @@ noise_floor_all_RHCP = np.full([*transmitter_id.shape[0], J_2], np.nan)
 
 delay_offset = 4
 
+t0 = timer()
 # derive floating SP bin location and effective scattering area A_eff
 for sec in range(len(transmitter_id)):
-    t0 = timer()
-
     # retrieve rx positions and velocities
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
     rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
@@ -1019,14 +968,14 @@ for sec in range(len(transmitter_id)):
         zenith_code_phase1 = delay_correction(zenith_code_phase1, 1023)
 
         # Part 3B: noise floor here to avoid another interation over [sec,J_2]
-        counts_LHCP1 = ddm_power_counts[sec][ngrx_channel]
-        counts_RHCP1 = ddm_power_counts[sec][ngrx_channel + J_2]
+        nf_counts_LHCP1 = ddm_power_counts[sec, ngrx_channel, :, :]
+        nf_counts_RHCP1 = ddm_power_counts[sec, ngrx_channel + J_2, :, :]
 
-        noise_floor_bins_LHCP1 = counts_LHCP1[:, -delay_offset:]
-        noise_floor_bins_RHCP1 = counts_RHCP1[:, -delay_offset:]
+        noise_floor_bins_LHCP1 = nf_counts_LHCP1[:, -delay_offset:]
+        noise_floor_bins_RHCP1 = nf_counts_RHCP1[:, -delay_offset:]
 
         if (not np.isnan(tx_pos_x[sec][ngrx_channel])) and (
-            np.count_nonzero(counts_LHCP1) > 0
+            not np.isnan(counts_LHCP1).all()
         ):
             # peak delay and doppler location
             # assume LHCP and RHCP DDMs have the same peak location
@@ -1063,10 +1012,8 @@ for sec in range(len(transmitter_id)):
             sp_doppler_col1 = center_doppler_bin - d_doppler_bin1
 
             # SP delay and doppler location
-            peak_delay_row[sec][ngrx_channel] = (
-                peak_delay_row1 - 1
-            )  # correct to 0-based index
-            peak_doppler_col[sec][ngrx_channel] = peak_doppler_col1 - 1
+            peak_delay_row[sec][ngrx_channel] = peak_delay_row1[0]  # 0-based index
+            peak_doppler_col[sec][ngrx_channel] = peak_doppler_col1[0]
 
             sp_delay_row[sec][ngrx_channel] = sp_delay_row1
             sp_delay_error[sec][ngrx_channel] = d_delay_chips1
@@ -1074,14 +1021,12 @@ for sec in range(len(transmitter_id)):
             sp_doppler_col[sec][ngrx_channel] = sp_doppler_col1
             sp_doppler_error[sec][ngrx_channel] = d_doppler_hz1
 
-            noise_floor_all_LHCP[sec][ngrx_channel] = np.mean(noise_floor_bins_LHCP1)
-            noise_floor_all_RHCP[sec][ngrx_channel] = np.mean(noise_floor_bins_RHCP1)
+            noise_floor_all_LHCP[sec][ngrx_channel] = np.nanmean(noise_floor_bins_LHCP1)
+            noise_floor_all_RHCP[sec][ngrx_channel] = np.nanmean(noise_floor_bins_RHCP1)
 
         zenith_code_phase[sec][ngrx_channel] = zenith_code_phase1
 
-    print(
-        f"******** finish processing part 4B {sec} second data with {timer() - t0}********"
-    )
+print(f"******** finish processing part 4B data with {timer() - t0}********")
 
 # extend to RHCP channels
 peak_delay_row[:, J_2:J] = peak_delay_row[:, 0:J_2]
@@ -1112,33 +1057,34 @@ sp_delay_row_LHCP = sp_delay_row[:, :10]  # reference to LHCP delay row
 valid_idx = np.where(
     (sp_delay_row_LHCP > 0)
     & (sp_delay_row_LHCP < (39 - sp_safe_margin))
-    & ~np.isnan(sp_safe_margin)
+    & ~np.isnan(noise_floor_all_LHCP)
 )
 
+
+# Part 3C: confidence flag of the SP solved
+confidence_flag = np.full([*transmitter_id.shape], np.nan)
+
 # noise floor is the median of the average counts
-noise_floor_LHCP = np.median(noise_floor_all_LHCP[valid_idx])
-noise_floor_RHCP = np.median(noise_floor_all_RHCP[valid_idx])
+noise_floor_LHCP = np.nanmedian(noise_floor_all_LHCP[valid_idx])
+noise_floor_RHCP = np.nanmedian(noise_floor_all_RHCP[valid_idx])
 
 # SNR of SP
-snr_LHCP_db = np.full([transmitter_id.shape[0], J_2], np.nan)
 # flag 0 for signal < 0
-snr_flag_LHCP = np.full([*transmitter_id.shape[0], J_2], np.nan)
-
-snr_RHCP_db = np.full([transmitter_id.shape[0], J_2], np.nan)
-snr_flag_RHCP = np.full([*transmitter_id.shape[0], J_2], np.nan)
+ddm_snr = np.full([*transmitter_id.shape], np.nan)
+snr_flag = np.full([*transmitter_id.shape], np.nan)
 
 
 for sec in range(len(transmitter_id)):
     for ngrx_channel in range(J_2):
-        counts_LHCP1 = ddm_power_counts[sec][ngrx_channel]
-        counts_RHCP1 = ddm_power_counts[sec][ngrx_channel + J_2]
+        counts_LHCP1 = ddm_power_counts[sec, ngrx_channel, :, :]
+        counts_RHCP1 = ddm_power_counts[sec, ngrx_channel + J_2, :, :]
 
         sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel]) + 1
         sp_doppler_col1 = np.floor(sp_doppler_col[sec][ngrx_channel]) + 1
 
-        if (0 < sp_delay_row1 <= 40) and (0 < sp_doppler_col1 <= 5):
-            sp_counts_LHCP1 = counts_LHCP1[sp_delay_row1, sp_doppler_col1]
-            sp_counts_RHCP1 = counts_RHCP1[sp_delay_row1, sp_doppler_col1]
+        if (0 < sp_delay_row1 < 40) and (0 < sp_doppler_col1 < 5):
+            sp_counts_LHCP1 = counts_LHCP1[int(sp_delay_row1), int(sp_doppler_col1)]
+            sp_counts_RHCP1 = counts_RHCP1[int(sp_delay_row1), int(sp_doppler_col1)]
 
             signal_counts_LHCP1 = sp_counts_LHCP1 - noise_floor_LHCP
             snr_LHCP1 = signal_counts_LHCP1 / noise_floor_LHCP
@@ -1151,8 +1097,8 @@ for sec in range(len(transmitter_id)):
             else:
                 snr_LHCP_db1 = np.nan
                 snr_flag_LHCP1 = 0
-            snr_LHCP_db[sec][ngrx_channel] = snr_LHCP_db1
-            snr_flag_LHCP[sec][ngrx_channel] = snr_flag_LHCP1
+            ddm_snr[sec][ngrx_channel] = snr_LHCP_db1
+            snr_flag[sec][ngrx_channel] = snr_flag_LHCP1
 
             if signal_counts_RHCP1 > 0:
                 snr_RHCP_db1 = power2db(snr_RHCP1)
@@ -1160,8 +1106,61 @@ for sec in range(len(transmitter_id)):
             else:
                 snr_RHCP_db1 = np.nan
                 snr_flag_RHCP1 = 0
-            snr_RHCP_db[sec][ngrx_channel] = snr_RHCP_db1
-            snr_flag_RHCP[sec][ngrx_channel] = snr_flag_RHCP1
+            ddm_snr[sec][ngrx_channel + J_2] = snr_RHCP_db1
+            snr_flag[sec][ngrx_channel + J_2] = snr_flag_RHCP1
+
+            sx_delay_error1 = abs(sp_delay_error[sec][ngrx_channel])
+            sx_doppler_error1 = abs(sp_doppler_error[sec][ngrx_channel])
+            sx_d_snell_angle1 = abs(sx_d_snell_angle[sec][ngrx_channel])
+
+            if not np.isnan(tx_pos_x[sec][ngrx_channel]):
+                # criteria may change at a later stage
+                delay_doppler_snell1 = (
+                    (sx_delay_error1 < 1.25)
+                    & (abs(sx_doppler_error1) < 250)
+                    & (sx_d_snell_angle1 < 2)
+                )
+
+            if snr_LHCP1 >= 2 & ~delay_doppler_snell1:
+                confidence_flag1 = 0
+            elif snr_LHCP1 < 2 & ~delay_doppler_snell1:
+                confidence_flag1 = 1
+            elif snr_LHCP1 < 2 & delay_doppler_snell1:
+                confidence_flag1 = 2
+            elif snr_LHCP1 >= 2 & delay_doppler_snell1:
+                confidence_flag1 = 3
+            else:
+                confidence_flag1 = np.nan
+
+            confidence_flag[sec][ngrx_channel] = confidence_flag1
+
+noise_floor = [
+    np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_LHCP),
+    np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_RHCP),
+]
+L1_postCal["noise_floor"] = noise_floor
+L1_postCal["ddm_snr"] = ddm_snr
+L1_postCal["snr_flag"] = snr_flag
+
+confidence_flag[:, J_2:J] = confidence_flag[:, 0:J_2]
+
+L1_postCal["confidence_flag"] = confidence_flag
+
+L1_postCal["sp_ngrx_delay_correction"] = sp_delay_error
+L1_postCal["sp_ngrx_dopp_correction"] = sp_doppler_error
+
+
+# Part 5: Copol and xpol BRCS, reflectivity, peak reflectivity
+# separate copol and xpol gain for using later
+# rx_gain_copol_LL = sx_rx_gain_copol(1:10,:);
+# rx_gain_copol_RR = sx_rx_gain_copol(11:20,:);
+
+# rx_gain_xpol_RL = sx_rx_gain_xpol(1:10,:);
+# rx_gain_xpol_LR = sx_rx_gain_xpol(11:20,:);
+
+
+norm_refl_waveform = np.full([*transmitter_id.shape, 40, 1], np.nan)
+
 
 """
 # derive brcs, nbrcs, and other parameters
