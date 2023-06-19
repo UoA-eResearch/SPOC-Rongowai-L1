@@ -585,6 +585,7 @@ L1_postCal["ddm_ant"] = ddm_ant  # 0-based
 #   # --------------------- Part 4A: SP solver and geometries
 # initialise variables
 # initialise a huge amount of empty arrays
+"""
 sx_pos_x = np.full([*transmitter_id.shape], np.nan)
 sx_pos_y = np.full([*transmitter_id.shape], np.nan)
 sx_pos_z = np.full([*transmitter_id.shape], np.nan)
@@ -855,7 +856,7 @@ L1_postCal["gps_off_boresight_angle_deg"] = gps_boresight  # checked ok
 L1_postCal["static_gps_eirp"] = static_gps_eirp  # checked ok
 L1_postCal["gps_tx_power_db_w"] = gps_tx_power_db_w  # checked ok
 L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
-
+"""
 
 ############# to save debug time, save and restore variables ##########
 #
@@ -884,42 +885,42 @@ L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
 # # numpy_assert_almost_dict_values(L1_postCal, L1_postCal_loaded)
 # ##############
 
-# L1_postCal = np.load("debug.npy", allow_pickle=True).item()
+L1_postCal = np.load("debug_4a.npy", allow_pickle=True).item()
 
-# sx_pos_x = L1_postCal["sp_pos_x"]
-# sx_pos_y = L1_postCal["sp_pos_y"]
-# sx_pos_z = L1_postCal["sp_pos_z"]
+sx_pos_x = L1_postCal["sp_pos_x"]
+sx_pos_y = L1_postCal["sp_pos_y"]
+sx_pos_z = L1_postCal["sp_pos_z"]
 # #
-# sx_lat = L1_postCal["sp_lat"]
-# sx_lon = L1_postCal["sp_lon"]
-# sx_alt = L1_postCal["sp_alt"]
+sx_lat = L1_postCal["sp_lat"]
+sx_lon = L1_postCal["sp_lon"]
+sx_alt = L1_postCal["sp_alt"]
 # #
-# sx_vel_x = L1_postCal["sp_vel_x"]
-# sx_vel_y = L1_postCal["sp_vel_y"]
-# sx_vel_z = L1_postCal["sp_vel_z"]
+sx_vel_x = L1_postCal["sp_vel_x"]
+sx_vel_y = L1_postCal["sp_vel_y"]
+sx_vel_z = L1_postCal["sp_vel_z"]
 # #
-# surface_type = L1_postCal["sp_surface_type"]
-# dist_to_coast_km = L1_postCal["sp_dist_to_coast_km"]
-# LOS_flag = L1_postCal["LOS_flag"]
+surface_type = L1_postCal["sp_surface_type"]
+dist_to_coast_km = L1_postCal["sp_dist_to_coast_km"]
+LOS_flag = L1_postCal["LOS_flag"]
 # #
-# rx_to_sp_range = L1_postCal["rx_to_sp_range"]
-# tx_to_sp_range = L1_postCal["tx_to_sp_range"]
+rx_to_sp_range = L1_postCal["rx_to_sp_range"]
+tx_to_sp_range = L1_postCal["tx_to_sp_range"]
 # #
-# sx_inc_angle = L1_postCal["sp_inc_angle"]
-# sx_d_snell_angle = L1_postCal["sp_d_snell_angle"]
+sx_inc_angle = L1_postCal["sp_inc_angle"]
+sx_d_snell_angle = L1_postCal["sp_d_snell_angle"]
 # #
-# sx_theta_body = L1_postCal["sp_theta_body"]
-# sx_az_body = L1_postCal["sp_az_body"]
-# sx_theta_enu = L1_postCal["sp_theta_enu"]
-# sx_az_enu = L1_postCal["sp_az_enu"]
+sx_theta_body = L1_postCal["sp_theta_body"]
+sx_az_body = L1_postCal["sp_az_body"]
+sx_theta_enu = L1_postCal["sp_theta_enu"]
+sx_az_enu = L1_postCal["sp_az_enu"]
 # #
-# sx_rx_gain = L1_postCal["sp_rx_gain"]
+sx_rx_gain = L1_postCal["sp_rx_gain"]
 # #
-# gps_boresight = L1_postCal["gps_off_boresight_angle_deg"]
+gps_boresight = L1_postCal["gps_off_boresight_angle_deg"]
 # #
-# static_gps_eirp = L1_postCal["static_gps_eirp"]
-# gps_tx_power_db_w = L1_postCal["gps_tx_power_db_w"]
-# gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
+static_gps_eirp = L1_postCal["static_gps_eirp"]
+gps_tx_power_db_w = L1_postCal["gps_tx_power_db_w"]
+gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
 
 # ##############
 
@@ -936,6 +937,8 @@ sp_doppler_error = np.full([*transmitter_id.shape], np.nan)
 
 zenith_code_phase = np.full([*transmitter_id.shape], np.nan)
 
+noise_floor_all_LHCP = np.full([transmitter_id.shape[0], J_2], np.nan)
+noise_floor_all_RHCP = np.full([*transmitter_id.shape[0], J_2], np.nan)
 
 # brcs = np.full([*transmitter_id.shape, 40, 5], np.nan)
 # A_eff = np.full([*transmitter_id.shape, 40, 5], np.nan)
@@ -962,6 +965,8 @@ zenith_code_phase = np.full([*transmitter_id.shape], np.nan)
 
 # derive amb-function (chi2) to be used in computing A_eff
 # chi2 = get_chi2(40, 5)  # 0-based
+
+delay_offset = 4
 
 # derive floating SP bin location and effective scattering area A_eff
 for sec in range(len(transmitter_id)):
@@ -1011,12 +1016,18 @@ for sec in range(len(transmitter_id)):
         zenith_code_phase1 = delay_center_chips1 + add_range_to_sp_chips1
         zenith_code_phase1 = delay_correction(zenith_code_phase1, 1023)
 
+        # Part 3B: noise floor here to avoid another interation over [sec,J_2]
+        counts_LHCP1 = ddm_power_counts[sec][ngrx_channel]
+        counts_RHCP1 = ddm_power_counts[sec][ngrx_channel + J_2]
+
+        noise_floor_bins_LHCP1 = counts_LHCP1[:, -delay_offset:]
+        noise_floor_bins_RHCP1 = counts_RHCP1[:, -delay_offset:]
+
         if (not np.isnan(tx_pos_x[sec][ngrx_channel])) and (
             np.count_nonzero(counts_LHCP1) > 0
         ):
             # peak delay and doppler location
             # assume LHCP and RHCP DDMs have the same peak location
-
             peak_counts1 = np.max(counts_LHCP1)
             [peak_doppler_col1, peak_delay_row1] = np.where(
                 counts_LHCP1 == peak_counts1
@@ -1061,6 +1072,9 @@ for sec in range(len(transmitter_id)):
             sp_doppler_col[sec][ngrx_channel] = sp_doppler_col1
             sp_doppler_error[sec][ngrx_channel] = d_doppler_hz1
 
+            noise_floor_all_LHCP[sec][ngrx_channel] = np.mean(noise_floor_bins_LHCP1)
+            noise_floor_all_RHCP[sec][ngrx_channel] = np.mean(noise_floor_bins_RHCP1)
+
         zenith_code_phase[sec][ngrx_channel] = zenith_code_phase1
 
     print(
@@ -1085,6 +1099,67 @@ L1_postCal["sp_delay_error"] = sp_delay_error  # checked diff 1 e-4
 L1_postCal["sp_dopp_error"] = sp_doppler_error  # checked diff 1 / e2
 
 L1_postCal["zenith_code_phase"] = zenith_code_phase  # checked ok
+
+
+# Part 3B: noise floor and SNR
+sp_safe_margin = 9  # safe space between SP and DDM end
+
+# single noise floor from valid DDMs
+sp_delay_row_LHCP = sp_delay_row[:, :10]  # reference to LHCP delay row
+
+valid_idx = np.where(
+    (sp_delay_row_LHCP > 0)
+    & (sp_delay_row_LHCP < (39 - sp_safe_margin))
+    & ~np.isnan(sp_safe_margin)
+)
+
+# noise floor is the median of the average counts
+noise_floor_LHCP = np.median(noise_floor_all_LHCP[valid_idx])
+noise_floor_RHCP = np.median(noise_floor_all_RHCP[valid_idx])
+
+# SNR of SP
+snr_LHCP_db = np.full([transmitter_id.shape[0], J_2], np.nan)
+# flag 0 for signal < 0
+snr_flag_LHCP = np.full([*transmitter_id.shape[0], J_2], np.nan)
+
+snr_RHCP_db = np.full([transmitter_id.shape[0], J_2], np.nan)
+snr_flag_RHCP = np.full([*transmitter_id.shape[0], J_2], np.nan)
+
+
+for sec in range(len(transmitter_id)):
+    for ngrx_channel in range(J_2):
+        counts_LHCP1 = ddm_power_counts[sec][ngrx_channel]
+        counts_RHCP1 = ddm_power_counts[sec][ngrx_channel + J_2]
+
+        sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel]) + 1
+        sp_doppler_col1 = np.floor(sp_doppler_col[sec][ngrx_channel]) + 1
+
+        if (0 < sp_delay_row1 <= 40) and (0 < sp_doppler_col1 <= 5):
+            sp_counts_LHCP1 = counts_LHCP1[sp_delay_row1, sp_doppler_col1]
+            sp_counts_RHCP1 = counts_RHCP1[sp_delay_row1, sp_doppler_col1]
+
+            signal_counts_LHCP1 = sp_counts_LHCP1 - noise_floor_LHCP
+            snr_LHCP1 = signal_counts_LHCP1 / noise_floor_LHCP
+            signal_counts_RHCP1 = sp_counts_RHCP1 - noise_floor_RHCP
+            snr_RHCP1 = signal_counts_RHCP1 / noise_floor_RHCP
+
+            if signal_counts_LHCP1 > 0:
+                snr_LHCP_db1 = power2db(snr_LHCP1)
+                snr_flag_LHCP1 = 1
+            else:
+                snr_LHCP_db1 = np.nan
+                snr_flag_LHCP1 = 0
+            snr_LHCP_db[sec][ngrx_channel] = snr_LHCP_db1
+            snr_flag_LHCP[sec][ngrx_channel] = snr_flag_LHCP1
+
+            if signal_counts_RHCP1 > 0:
+                snr_RHCP_db1 = power2db(snr_RHCP1)
+                snr_flag_RHCP1 = 1
+            else:
+                snr_RHCP_db1 = np.nan
+                snr_flag_RHCP1 = 0
+            snr_RHCP_db[sec][ngrx_channel] = snr_RHCP_db1
+            snr_flag_RHCP[sec][ngrx_channel] = snr_flag_RHCP1
 
 """
 # derive brcs, nbrcs, and other parameters
