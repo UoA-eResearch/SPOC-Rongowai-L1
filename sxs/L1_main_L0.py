@@ -41,6 +41,7 @@ from specular import (
     coh_det,
     meter2chips,
     delay_correction,
+    deldop,
 )
 
 # Required to load the land cover mask file
@@ -98,6 +99,10 @@ delay_bin_res = load_netcdf(
 doppler_bin_res = load_netcdf(
     L0_dataset["/science/ddm/doppler_bin_res_narrow"]
 )  # doppler bin resolution
+
+# delay and Doppler center bin
+center_delay_bin = load_netcdf(L0_dataset["/science/ddm/ddm_center_delay_bin"])[0]
+center_doppler_bin = load_netcdf(L0_dataset["/science/ddm/ddm_center_doppler_bin"])[0]
 
 # absolute ddm center delay and doppler
 delay_center_chips = load_netcdf(L0_dataset["/science/ddm/center_delay_bin_code_phase"])
@@ -917,64 +922,58 @@ L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
 # gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
 
 # ##############
-"""
+
 # -------------------- Part 4B: BRCS/NBRCS, reflectivity, coherent status and fresnel zone
 # initialise variables
-brcs_ddm_peak_bin_delay_row = np.full([*transmitter_id.shape], np.nan)
-brcs_ddm_peak_bin_dopp_col = np.full([*transmitter_id.shape], np.nan)
+peak_delay_row = np.full([*transmitter_id.shape], np.nan)
+peak_doppler_col = np.full([*transmitter_id.shape], np.nan)
 
-brcs_ddm_sp_bin_delay_row = np.full([*transmitter_id.shape], np.nan)
-brcs_ddm_sp_bin_dopp_col = np.full([*transmitter_id.shape], np.nan)
-
+sp_delay_row = np.full([*transmitter_id.shape], np.nan)
 sp_delay_error = np.full([*transmitter_id.shape], np.nan)
-sp_dopp_error = np.full([*transmitter_id.shape], np.nan)
 
-confidence_flag = np.full([*transmitter_id.shape], np.nan)
+sp_doppler_col = np.full([*transmitter_id.shape], np.nan)
+sp_doppler_error = np.full([*transmitter_id.shape], np.nan)
 
 zenith_code_phase = np.full([*transmitter_id.shape], np.nan)
 
-brcs = np.full([*transmitter_id.shape, 40, 5], np.nan)
-A_eff = np.full([*transmitter_id.shape, 40, 5], np.nan)
-A_eff_all = np.full([*transmitter_id.shape, 79, 9], np.nan)  # debug only
 
-norm_refl_waveform = np.full([*transmitter_id.shape, 40, 1], np.nan)
+# brcs = np.full([*transmitter_id.shape, 40, 5], np.nan)
+# A_eff = np.full([*transmitter_id.shape, 40, 5], np.nan)
+# A_eff_all = np.full([*transmitter_id.shape, 79, 9], np.nan)  # debug only
 
-nbrcs_scatter_area_v1 = np.full([*transmitter_id.shape], np.nan)
-ddm_nbrcs_v1 = np.full([*transmitter_id.shape], np.nan)
+# norm_refl_waveform = np.full([*transmitter_id.shape, 40, 1], np.nan)
 
-nbrcs_scatter_area_v2 = np.full([*transmitter_id.shape], np.nan)
-ddm_nbrcs_v2 = np.full([*transmitter_id.shape], np.nan)
+# nbrcs_scatter_area_v1 = np.full([*transmitter_id.shape], np.nan)
+# ddm_nbrcs_v1 = np.full([*transmitter_id.shape], np.nan)
 
-surface_reflectivity = np.full([*transmitter_id.shape, 40, 5], np.nan)
-surface_reflectivity_peak = np.full([*transmitter_id.shape], np.nan)
+# nbrcs_scatter_area_v2 = np.full([*transmitter_id.shape], np.nan)
+# ddm_nbrcs_v2 = np.full([*transmitter_id.shape], np.nan)
 
-fresnel_coeff = np.full([*transmitter_id.shape], np.nan)
-fresnel_minor = np.full([*transmitter_id.shape], np.nan)
-fresnel_major = np.full([*transmitter_id.shape], np.nan)
-fresnel_orientation = np.full([*transmitter_id.shape], np.nan)
+# surface_reflectivity = np.full([*transmitter_id.shape, 40, 5], np.nan)
+# surface_reflectivity_peak = np.full([*transmitter_id.shape], np.nan)
 
-coherency_ratio = np.full([*transmitter_id.shape], np.nan)
-coherency_state = np.full([*transmitter_id.shape], np.nan)
+# fresnel_coeff = np.full([*transmitter_id.shape], np.nan)
+# fresnel_minor = np.full([*transmitter_id.shape], np.nan)
+# fresnel_major = np.full([*transmitter_id.shape], np.nan)
+# fresnel_orientation = np.full([*transmitter_id.shape], np.nan)
+
+# coherency_ratio = np.full([*transmitter_id.shape], np.nan)
+# coherency_state = np.full([*transmitter_id.shape], np.nan)
 
 # derive amb-function (chi2) to be used in computing A_eff
-chi2 = get_chi2(40, 5)  # 0-based
+# chi2 = get_chi2(40, 5)  # 0-based
 
 # derive floating SP bin location and effective scattering area A_eff
 for sec in range(len(transmitter_id)):
-    t0 = timer()
-    tn = 0
-    tnn = 0
-    tnnn = 0
-
     # retrieve rx positions and velocities
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
     rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
-    rx_clk_drift1 = rx_clk_drift_mps[sec]
-    rx1 = {
-        "rx_pos_xyz": rx_pos_xyz1,
-        "rx_vel_xyz": rx_vel_xyz1,
-        "rx_clk_drift": rx_clk_drift1,
-    }
+    # rx_clk_drift1 = rx_clk_drift_mps[sec]
+    # rx1 = {
+    #    "rx_pos_xyz": rx_pos_xyz1,
+    #    "rx_vel_xyz": rx_vel_xyz1,
+    #    "rx_clk_drift": rx_clk_drift1,
+    # }
 
     for ngrx_channel in range(J_2):
         # retrieve tx positions and velocities
@@ -993,8 +992,6 @@ for sec in range(len(transmitter_id)):
             ]
         )
 
-        tx1 = {"tx_pos_xyz": tx_pos_xyz1, "tx_vel_xyz": tx_vel_xyz1}
-
         # retrieve sx-related parameters
         sx_pos_xyz1 = np.array(
             [
@@ -1003,176 +1000,93 @@ for sec in range(len(transmitter_id)):
                 sx_pos_z[sec][ngrx_channel],
             ]
         )
-        lon, lat, alt = pyproj.transform(ecef, lla, *sx_pos_xyz1, radians=False)
-        sx_pos_lla1 = [lat, lon, alt]
 
-        sx_inc_angle1 = sx_inc_angle[sec][ngrx_channel]
-        sx_d_snell_deg1 = sx_d_snell_angle[sec][ngrx_channel]
-        dist_to_coast1 = dist_to_coast_km[sec][ngrx_channel]
-
-        sx1 = {
-            "sx_pos_xyz": sx_pos_xyz1,
-            "sx_d_snell": sx_d_snell_deg1,
-            "dist_to_coast": dist_to_coast1,
-        }
-
-        # retrieve ddm-related variables
-        raw_counts1 = raw_counts[sec, ngrx_channel, :, :]
+        counts_LHCP1 = raw_counts[sec, ngrx_channel, :, :]
+        # from onboard tracker
         add_range_to_sp1 = add_range_to_sp[sec][ngrx_channel]
-        snr_db1 = snr_db[sec][ngrx_channel]
-
         delay_center_chips1 = delay_center_chips[sec][ngrx_channel]
 
-        doppler_center_hz1 = doppler_center_hz[sec][ngrx_channel]
+        # zenith code phase
+        add_range_to_sp_chips1 = meter2chips(add_range_to_sp1)
+        zenith_code_phase1 = delay_center_chips1 + add_range_to_sp_chips1
+        zenith_code_phase1 = delay_correction(zenith_code_phase1, 1023)
 
-        T_coh1 = coherent_duration[sec]
-        ddm1 = {
-            "raw_counts": raw_counts1,
-            "add_range_to_sp": add_range_to_sp1,
-            "snr_db": snr_db1,
-            "delay_center_chips": delay_center_chips1,
-            "doppler_center_hz": doppler_center_hz1,
-            "T_coh": T_coh1,
-            "delay_resolution": 0.25,
-            "num_delay_bins": 40,
-            "delay_center_bin": 20,
-            "doppler_resolution": 500,
-            "num_doppler_bins": 5,
-            "doppler_center_bin": 2,
-        }
-
-        if (not np.isnan(sx_pos_x[sec][ngrx_channel])) and (
-            np.count_nonzero(raw_counts1) > 0
+        if (not np.isnan(tx_pos_x[sec][ngrx_channel])) and (
+            np.count_nonzero(counts_LHCP1) > 0
         ):
-            tn1 = timer()
-            # Part 4.3: SP-related variables - 2
-            # this part derives confidence and floating bin locations of SP
-            peak_delay_bin1, peak_doppler_bin1 = np.unravel_index(
-                raw_counts1.argmax(), raw_counts1.shape
+            # peak delay and doppler location
+            # assume LHCP and RHCP DDMs have the same peak location
+
+            peak_counts1 = np.max(counts_LHCP1)
+            [peak_doppler_col1, peak_delay_row1] = np.where(
+                counts_LHCP1 == peak_counts1
             )
 
-            specular_bin1, zenith_code_phase1, confidence_flag1 = get_specular_bin(
-                tx1, rx1, sx1, ddm1
+            # tx to rx range
+            r_trx1 = np.linalg.norm(np.array(tx_pos_xyz1) - np.array(rx_pos_xyz1), 2)
+
+            # SOC derived more accurate additional range to SP
+            r_tsx1 = np.linalg.norm(np.array(tx_pos_xyz1) - np.array(sx_pos_xyz1), 2)
+            r_rsx1 = np.linalg.norm(np.array(rx_pos_xyz1) - np.array(sx_pos_xyz1), 2)
+
+            add_range_to_sp_soc1 = r_tsx1 + r_rsx1 - r_trx1
+            d_add_range1 = add_range_to_sp_soc1 - add_range_to_sp1
+
+            d_delay_chips1 = meter2chips(d_add_range1)
+            d_delay_bin1 = d_delay_chips1 / delay_bin_res
+
+            sp_delay_row1 = center_delay_bin - d_delay_bin1
+
+            # SP doppler value
+            _, sp_doppler_hz1, _ = deldop(
+                tx_pos_xyz1, rx_pos_xyz1, tx_vel_xyz1, rx_vel_xyz1, sx_pos_xyz1
             )
 
-            sx1["sx_delay_bin"] = specular_bin1[0]
-            sx1["sx_doppler_bin"] = specular_bin1[1]
-            tn += timer() - tn1
-            tnn1 = timer()
-            # Part 4.4a: Effective scattering area
-            L = 18030
-            grid_res = 30  # L may need to be updated in the future
+            doppler_center_hz1 = doppler_center_hz[sec][ngrx_channel]
 
-            local_dem1 = get_local_dem(sx_pos_lla1, dem, dtu10, dist_to_coast1)
+            d_doppler_hz1 = doppler_center_hz1 - sp_doppler_hz1 + 250
+            d_doppler_bin1 = d_doppler_hz1 / doppler_bin_res
 
-            tnn += timer() - tnn1
-            tnnn1 = timer()
-            A_eff1, A_eff_all1 = get_ddm_Aeff4(tx1, rx1, sx1, local_dem1, chi2)
+            sp_doppler_col1 = center_doppler_bin - d_doppler_bin1
 
-            tnnn += timer() - tnnn1
-            # save to variables
-            brcs_ddm_peak_bin_delay_row[sec][
-                ngrx_channel
-            ] = peak_delay_bin1  # 0-based indces
-            brcs_ddm_peak_bin_dopp_col[sec][ngrx_channel] = peak_doppler_bin1
+            # SP delay and doppler location
+            peak_delay_row[sec][ngrx_channel] = (
+                peak_delay_row1 - 1
+            )  # correct to 0-based index
+            peak_doppler_col[sec][ngrx_channel] = peak_doppler_col1 - 1
 
-            brcs_ddm_sp_bin_delay_row[sec][ngrx_channel] = specular_bin1[0]
-            brcs_ddm_sp_bin_dopp_col[sec][ngrx_channel] = specular_bin1[1]
-            sp_delay_error[sec][ngrx_channel] = specular_bin1[2]
-            sp_dopp_error[sec][ngrx_channel] = specular_bin1[3]
+            sp_delay_row[sec][ngrx_channel] = sp_delay_row1
+            sp_delay_error[sec][ngrx_channel] = d_delay_chips1
 
-            zenith_code_phase[sec][ngrx_channel] = zenith_code_phase1
+            sp_doppler_col[sec][ngrx_channel] = sp_doppler_col1
+            sp_doppler_error[sec][ngrx_channel] = d_doppler_hz1
 
-            confidence_flag[sec][ngrx_channel] = confidence_flag1
+        zenith_code_phase[sec][ngrx_channel] = zenith_code_phase1
 
-            A_eff[sec, ngrx_channel, :, :] = A_eff1.T
-            A_eff_all[sec, ngrx_channel, :, :] = A_eff_all1.T
     print(
         f"******** finish processing part 4B {sec} second data with {timer() - t0}********"
     )
-    print("specular bin: ", tn)
-    print("local dem   : ", tnn)
-    print("aeff ddm    : ", tnnn)
 
 # extend to RHCP channels
-brcs_ddm_peak_bin_delay_row[:, J_2:J] = brcs_ddm_peak_bin_delay_row[:, 0:J_2]
-brcs_ddm_peak_bin_dopp_col[:, J_2:J] = brcs_ddm_peak_bin_dopp_col[:, 0:J_2]
+peak_delay_row[:, J_2:J] = peak_delay_row[:, 0:J_2]
+peak_doppler_col[:, J_2:J] = peak_doppler_col[:, 0:J_2]
 
-brcs_ddm_sp_bin_delay_row[:, J_2:J] = brcs_ddm_sp_bin_delay_row[:, 0:J_2]
-brcs_ddm_sp_bin_dopp_col[:, J_2:J] = brcs_ddm_sp_bin_dopp_col[:, 0:J_2]
-sp_delay_error[:, J_2:J] = sp_delay_error[:, 0:J_2]
-sp_dopp_error[:, J_2:J] = sp_dopp_error[:, 0:J_2]
-
-zenith_code_phase[:, J_2:J] = zenith_code_phase[:, 0:J_2]
-
-confidence_flag[:, J_2:J] = confidence_flag[:, 0:J_2]
-
-A_eff[:, J_2:J, :, :] = A_eff[:, 0:J_2, :, :]
-A_eff_all[:, J_2:J, :, :] = A_eff_all[:, 0:J_2, :, :]
+sp_delay_row[:, J_2:J] = sp_delay_row[:, 0:J_2]
+sp_doppler_col[:, J_2:J] = sp_doppler_col[:, 0:J_2]
 
 # save variables
-L1_postCal["brcs_ddm_peak_bin_delay_row"] = brcs_ddm_peak_bin_delay_row  # checked ok
-L1_postCal["brcs_ddm_peak_bin_dopp_col"] = brcs_ddm_peak_bin_dopp_col  # checked ok
+L1_postCal["brcs_ddm_peak_bin_delay_row"] = peak_delay_row  # checked ok
+L1_postCal["brcs_ddm_peak_bin_dopp_col"] = peak_doppler_col  # checked ok
 
-L1_postCal[
-    "brcs_ddm_sp_bin_delay_row"
-] = brcs_ddm_sp_bin_delay_row  # checked diff 0.001
-L1_postCal["brcs_ddm_sp_bin_dopp_col"] = brcs_ddm_sp_bin_dopp_col  # checked diff 0.001
+L1_postCal["brcs_ddm_sp_bin_delay_row"] = sp_delay_row  # checked diff 0.001
+L1_postCal["brcs_ddm_sp_bin_dopp_col"] = sp_doppler_col  # checked diff 0.001
 
 L1_postCal["sp_delay_error"] = sp_delay_error  # checked diff 1 e-4
-L1_postCal["sp_dopp_error"] = sp_dopp_error  # checked diff 1 / e2
-L1_postCal["sp_ngrx_delay_correction"] = sp_delay_error
-L1_postCal["sp_ngrx_dopp_correction"] = sp_dopp_error
+L1_postCal["sp_dopp_error"] = sp_doppler_error  # checked diff 1 / e2
 
 L1_postCal["zenith_code_phase"] = zenith_code_phase  # checked ok
 
-L1_postCal["confidence_flag"] = confidence_flag  # checked ok
-
-L1_postCal["eff_scatter"] = A_eff
-L1_postCal["A_eff_all"] = A_eff_all
-
-############# to save debug time, save and restore variables ##########
-
-# np.save('debug1.npy', L1_postCal)
-
-######################################################################
-# L1_postCal = np.load('debug1.npy', allow_pickle=True).item()
-#
-# sx_pos_x = L1_postCal['sp_pos_x']
-# sx_pos_y = L1_postCal['sp_pos_y']
-# sx_pos_z = L1_postCal['sp_pos_z']
-#
-# sx_lat = L1_postCal['sp_lat']
-# sx_lon = L1_postCal['sp_lon']
-# sx_alt = L1_postCal['sp_alt']
-#
-# sx_vel_x = L1_postCal['sp_vel_x']
-# sx_vel_y = L1_postCal['sp_vel_y']
-# sx_vel_z = L1_postCal['sp_vel_z']
-#
-# sx_inc_angle = L1_postCal['sp_inc_angle']
-# sx_d_snell_angle = L1_postCal['sp_d_snell_angle']
-#
-# surface_type = L1_postCal['sp_surface_type']
-# dist_to_coast_km = L1_postCal['sp_dist_to_coast_km']
-# LOS_flag = L1_postCal['LOS_flag']
-#
-# static_gps_eirp = L1_postCal['static_gps_eirp']
-# gps_tx_power_db_w = L1_postCal['gps_tx_power_db_w']
-# gps_ant_gain_db_i = L1_postCal['gps_ant_gain_db_i']
-#
-# sx_rx_gain = L1_postCal['sp_rx_gain']
-#
-# rx_to_sp_range = L1_postCal['rx_to_sp_range']
-# tx_to_sp_range = L1_postCal['tx_to_sp_range']
-#
-# A_eff = L1_postCal['eff_scatter']
-#
-# brcs_ddm_sp_bin_delay_row = L1_postCal['brcs_ddm_sp_bin_delay_row']
-# brcs_ddm_sp_bin_dopp_col = L1_postCal['brcs_ddm_sp_bin_dopp_col']
-# ######################################################################
-
-
+"""
 # derive brcs, nbrcs, and other parameters
 for sec in range(len(transmitter_id)):
     t0 = timer()
