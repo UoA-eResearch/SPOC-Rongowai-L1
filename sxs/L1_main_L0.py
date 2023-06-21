@@ -8,8 +8,6 @@ from pathlib import Path
 import netCDF4 as nc
 import numpy as np
 import rasterio
-from scipy.interpolate import interpn
-import pyproj
 from datetime import datetime
 from PIL import Image
 from timeit import default_timer as timer
@@ -44,6 +42,7 @@ from specular import (
     deldop,
     los_status,
 )
+from projections import ecef2lla
 
 # Required to load the land cover mask file
 Image.MAX_IMAGE_PIXELS = None
@@ -275,15 +274,8 @@ for ngrx_channel in range(J):
 ant_temp_zenith = interp_ddm(eng_timestamp, zenith_ant_temp_eng, ddm_utc)
 ant_temp_nadir = interp_ddm(eng_timestamp, nadir_ant_temp_eng, ddm_utc)
 
-
-# ecef2lla Matlab function
-# define projections and transform
-# TODO function is depreciated,see following url
-# https://pyproj4.github.io/pyproj/stable/gotchas.html#upgrading-to-pyproj-2-from-pyproj-1
-ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
-lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
 # ecef2ella
-lon, lat, alt = pyproj.transform(ecef, lla, *rx_pos_xyz, radians=False)
+lon, lat, alt = ecef2lla.transform(*rx_pos_xyz, radians=False)
 rx_pos_lla = [lat, lon, alt]
 
 # determine specular point "over land" flag from landmask
@@ -648,7 +640,7 @@ for sec in range(len(transmitter_id)):
                 ) = sp_solver(tx_pos_xyz_dt, rx_pos_xyz_dt, dem, dtu10, landmask_nz)
                 tn += timer() - tn1
 
-                lon, lat, alt = pyproj.transform(ecef, lla, *sx_pos_xyz1, radians=False)
+                lon, lat, alt = ecef2lla.transform(*sx_pos_xyz1, radians=False)
                 sx_pos_lla1 = [lat, lon, alt]
                 # <lon,lat,alt> of the specular reflection
                 # algorithm version 1.11

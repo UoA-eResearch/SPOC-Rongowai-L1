@@ -8,13 +8,13 @@ from scipy import constants
 from scipy.interpolate import interpn, interp2d
 from scipy.signal import convolve2d
 import geopy.distance as geo_dist
-import time
 import pymap3d as pm
-from timeit import default_timer as timer
-from numba import jit, njit
+from numba import njit
+from numba.typed import List as numba_list
 
-from load_files import get_local_dem, get_map_value
+from load_files import get_local_dem
 from cal_functions import db2power
+from projections import ecef2lla, lla2ecef
 
 # define WGS84
 wgs84 = pyproj.Geod(ellps="WGS84")
@@ -23,10 +23,6 @@ wgs84_b = float(wgs84.b)
 wgs84_es = float(wgs84.es)
 abc = np.array([wgs84_a, wgs84_a, wgs84_b])
 
-
-# define projections
-ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
-lla = pyproj.Proj(proj="latlong", ellps="WGS84", datum="WGS84")
 
 # define Fibonacci sequence here, once
 k_fib = range(60)
@@ -122,7 +118,7 @@ def coarsetune(tx_pos_xyz, rx_pos_xyz):
     # find coarse SP using Fibonacci sequence
     # TODO: different from matlab from here, but the code looks fine
     SP_xyz_coarse = ite(tx_pos_xyz, rx_pos_xyz)
-    SP_lla_coarse = pyproj.transform(ecef, lla, *SP_xyz_coarse, radians=False)
+    SP_lla_coarse = ecef2lla.transform(*SP_xyz_coarse, radians=False)
     # longitude adjustment
     if SP_lla_coarse[0] < 0:
         SP_lla_coarse[0] += 360
@@ -211,11 +207,13 @@ def finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele):
 def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
     """% This code fine-tunes the coordinate of the initial SP based on the DTU10
     % datum thorugh a number of iterative steps."""
-    lat_bin, lon_bin, lat_bin_v, lon_bin_v = finetune_p1(sx_lla, L)
+    # numba optimisation
+    sp_temp = numba_list()
+    for sp_val in sx_lla:
+        sp_temp.append(sp_val)
+    lat_bin, lon_bin, lat_bin_v, lon_bin_v = finetune_p1(sp_temp, L)
     ele = model((lon_bin_v, lat_bin_v))
-    p_x, p_y, p_z = pyproj.transform(
-        lla, ecef, *[lon_bin_v, lat_bin_v, ele], radians=False
-    )
+    p_x, p_y, p_z = lla2ecef.transform(*[lon_bin_v, lat_bin_v, ele], radians=False)
     p_xyz = np.array([p_x, p_y, p_z])
     min_delay, m_i, n_i, ele = finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele)
     # unpack arrays with [0] else they keep nesting
@@ -250,7 +248,7 @@ def finetune_ocean(tx_pos_xyz, rx_pos_xyz, sp_lla_coarse, model, L, res_grid):
         # parameters for the next iteration - new searching area, new SP coordinate
         L = L * 2.0 / 11.0
     sp_temp1 = [sp_temp[1], sp_temp[0], sp_temp[2]]
-    sx_xyz = pyproj.transform(lla, ecef, *sp_temp1, radians=False)
+    sx_xyz = lla2ecef.transform(*sp_temp1, radians=False)
     return sx_xyz, sp_temp
 
 
@@ -347,7 +345,7 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     sx_pos_xyz, sx_pos_lla = finetune_ocean(
         tx_pos_xyz, rx_pos_xyz, sx_lla_coarse, dtu10, L_ocean_deg, res_ocean_meter
     )
-    # sx_pos_xyz = pyproj.transform(lla, ecef, *sx_pos_lla, radians=False)
+    # sx_pos_xyz = lla2ecef.transform(*sx_pos_lla, radians=False)
     # replaces get_map_value function
     # TODO Q: the resualt is not the same as get_map_value
     dist = dist_to_coast_nz((sx_pos_lla[1], sx_pos_lla[0]))
@@ -524,7 +522,7 @@ def ecef2enuf(P, S_ecef):
     # P = [-4593021.50000000,	608280.500000000,	-4370184.50000000]
     # S_ecef = [-4590047.30433596,	610685.547457113,	-4371634.83935421]
 
-    lon, lat, alt = pyproj.transform(ecef, lla, *P, radians=False)
+    lon, lat, alt = ecef2lla.transform(*P, radians=False)
     # TODO: The difference is gradually magnified.
     S_east, S_north, S_up = pm.ecef2enu(*S_ecef, lat, lon, alt, deg=True)
     phi_enuf, theta_enuf1, _ = cart2sph(S_east, S_north, S_up)
@@ -918,7 +916,7 @@ def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
 
     sx_pos_xyz = sx["sx_pos_xyz"]
     # ecef2ella
-    lon, lat, alt = pyproj.transform(ecef, lla, *sx_pos_xyz, radians=False)
+    lon, lat, alt = ecef2lla.transform(*sx_pos_xyz, radians=False)
     sx_pos_lla = [lat, lon, alt]
 
     sx_delay_bin = sx["sx_delay_bin"] + 1  # need to fix all 0-indexed bin to 1-indexed
@@ -952,7 +950,7 @@ def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
         for n in range(num_grids_coarse):
             # ecef2ella
             p_pos_lla1 = [lon_coarse[n], lat_coarse[m], ele_coarse[m, n]]
-            p_pos_xyz1 = pyproj.transform(lla, ecef, *p_pos_lla1, radians=False)
+            p_pos_xyz1 = lla2ecef.transform(*p_pos_lla1, radians=False)
 
             delay_p1, doppler_p1, _ = deldop(
                 tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_pos_xyz1
@@ -1254,7 +1252,7 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     b = a / math.cos(math.radians(inc_angle))  # minor semi
 
     # compute orientation relative to North
-    lon, lat, alt = pyproj.transform(ecef, lla, *sx_pos_xyz, radians=False)
+    lon, lat, alt = ecef2lla.transform(*sx_pos_xyz, radians=False)
     sx_lla = [lat, lon, alt]
 
     tx_e, tx_n, _ = pm.ecef2enu(*tx_pos_xyz, *sx_lla, deg=True)
