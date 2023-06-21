@@ -211,37 +211,18 @@ def finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele):
 def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
     """% This code fine-tunes the coordinate of the initial SP based on the DTU10
     % datum thorugh a number of iterative steps."""
-    # find the pixel location
-    # in Python sx_lla is (lon, lat, alt) not (lat, lon, alt)
-    min_lat, max_lat = (sx_lla[0] - L / 2, sx_lla[0] + L / 2)
-    min_lon, max_lon = (sx_lla[1] - L / 2, sx_lla[1] + L / 2)
-    lat_bin = np.linspace(min_lat, max_lat, num_grid)
-    lon_bin = np.linspace(min_lon, max_lon, num_grid)
-
-    # Vectorise the 11*11 nested loop
-    lat_bin_v = np.repeat(lat_bin, 11)
-    lon_bin_v = np.tile(lon_bin, 11)
+    lat_bin, lon_bin, lat_bin_v, lon_bin_v = finetune_p1(sx_lla, L)
     ele = model((lon_bin_v, lat_bin_v))
     p_x, p_y, p_z = pyproj.transform(
         lla, ecef, *[lon_bin_v, lat_bin_v, ele], radians=False
     )
-    p_xyz = np.array((p_x, p_y, p_z))
-    p_xyz_t = p_xyz - tx_xyz.reshape(-1, 1)
-    p_xyz_r = np.repeat(rx_xyz.reshape(-1, 1), len(p_x), axis=1) - p_xyz
-    delay_chip = np.linalg.norm(p_xyz_t, 2, axis=0) + np.linalg.norm(p_xyz_r, 2, axis=0)
-
-    ele = ele.reshape(11, -1)
-    delay_chip = (delay_chip / l_chip).reshape(11, -1)
-
-    # index of the pixel with minimal reflection path
-    min_delay = np.min(delay_chip)
-    m_i, n_i = np.where(delay_chip == (np.min(delay_chip)))
-
+    p_xyz = np.array([p_x, p_y, p_z])
+    min_delay, m_i, n_i, ele = finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele)
     # unpack arrays with [0] else they keep nesting
     sx_temp = [lat_bin[m_i][0], lon_bin[n_i][0], ele[m_i, n_i][0]]
-    # TODO we calculate geodesic distance between points in metres - replaces m_lldist.m
     # this is between Matlab idx = 5,6 so extra "-1" due to python 0-indexing (Mat5,6 -> Py4,5)
     NN = int((num_grid - 1) / 2) - 1
+    # TODO we calculate geodesic distance between points in metres - replaces m_lldist.m
     res = geo_dist.geodesic(
         (lat_bin[NN], lon_bin[NN]), (lat_bin[NN + 1], lon_bin[NN + 1])
     ).m
