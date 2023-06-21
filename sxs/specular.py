@@ -11,12 +11,18 @@ import geopy.distance as geo_dist
 import time
 import pymap3d as pm
 from timeit import default_timer as timer
+from numba import jit, njit
+
 from load_files import get_local_dem, get_map_value
 from cal_functions import db2power
 
 # define WGS84
 wgs84 = pyproj.Geod(ellps="WGS84")
-abc = np.array([wgs84.a, wgs84.a, wgs84.b])
+wgs84_a = float(wgs84.a)
+wgs84_b = float(wgs84.b)
+wgs84_es = float(wgs84.es)
+abc = np.array([wgs84_a, wgs84_a, wgs84_b])
+
 
 # define projections
 ecef = pyproj.Proj(proj="geocent", ellps="WGS84", datum="WGS84")
@@ -39,6 +45,7 @@ l_chip = constants.c / chip_rate
 num_grid = 11
 
 
+@njit
 def nadir(m_ecef):
     """% This function, based on the WGS84 model, computes the ECEF coordinate
     of the nadir point (n) of a in-space point (m) on a WGS84 model"""
@@ -46,17 +53,19 @@ def nadir(m_ecef):
     thetaD = math.asin(m_ecef[2] / np.linalg.norm(m_ecef, 2))
     cost2 = math.cos(thetaD) * math.cos(thetaD)
     # lat-dependent Earth radius
-    r = wgs84.a * np.sqrt((1 - wgs84.es) / (1 - wgs84.es * cost2))
+    r = wgs84_a * np.sqrt((1 - wgs84_es) / (1 - wgs84_es * cost2))
     # return nadir of m on WGS84
     return r * m_ecef / np.linalg.norm(m_ecef, 2)
 
 
+@njit
 def pdis(Tx, Rx, Sx):
     """% This function computes the distance from Tx to Sx to Rx
     % based on their coordinates given in ECEF"""
     return np.linalg.norm(Sx - Tx, 2) + np.linalg.norm(Rx - Sx, 2)
 
 
+@njit
 def ite(tx_pos_xyz, rx_pos_xyz):
     """% This function iteratively solve the positions of specular points
     % based on the WGS84 model
@@ -68,7 +77,7 @@ def ite(tx_pos_xyz, rx_pos_xyz):
     s_t2r = np.linalg.norm(rx_pos_xyz - tx_pos_xyz, 2)
 
     # determine iteration
-    N = next(x[0] for x in enumerate(fib_seq) if x[1] > s_t2r)
+    N = np.nanmin([x[0] for x in enumerate(fib_seq) if x[1] > s_t2r])
 
     # first iteration parameters
     a = rx_pos_xyz
@@ -124,6 +133,7 @@ def coarsetune(tx_pos_xyz, rx_pos_xyz):
     return SP_xyz_coarse, SP_lla_coarse
 
 
+@njit
 def los_status(tx_pos_xyz, rx_pos_xyz):
     """% This function determines if the RT vector has intersections
     % with the WGS84 ellipsoid (LOS existence)
@@ -152,9 +162,8 @@ def los_status(tx_pos_xyz, rx_pos_xyz):
     return False
 
 
-def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
-    """% This code fine-tunes the coordinate of the initial SP based on the DTU10
-    % datum thorugh a number of iterative steps."""
+@njit
+def finetune_p1(sx_lla, L):
     # find the pixel location
     # in Python sx_lla is (lon, lat, alt) not (lat, lon, alt)
     min_lat, max_lat = (sx_lla[0] - L / 2, sx_lla[0] + L / 2)
@@ -165,27 +174,53 @@ def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
 
     # Vectorise the 11*11 nested loop
     lat_bin_v = np.repeat(lat_bin, 11)
-    lon_bin_v = np.tile(lon_bin, 11)
-    ele = model((lon_bin_v, lat_bin_v))
-    p_x, p_y, p_z = pyproj.transform(
-        lla, ecef, *[lon_bin_v, lat_bin_v, ele], radians=False
-    )
-    p_xyz = np.array((p_x, p_y, p_z))
+    # lon_bin_v = np.tile(lon_bin, 11)
+    lon_bin_v = np.repeat(lon_bin, 11).reshape(-1, 11).T.flatten()
+    return lat_bin, lon_bin, lat_bin_v, lon_bin_v
+
+
+@njit
+def finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele):
     p_xyz_t = p_xyz - tx_xyz.reshape(-1, 1)
-    p_xyz_r = np.repeat(rx_xyz.reshape(-1, 1), len(p_x), axis=1) - p_xyz
-    delay_chip = np.linalg.norm(p_xyz_t, 2, axis=0) + np.linalg.norm(p_xyz_r, 2, axis=0)
+    p_xyz_r = np.repeat(rx_xyz, len(p_x))
+    p_xyz_r = p_xyz_r.reshape(-1, 3) - p_xyz.T
+    p_xyz_r = p_xyz_r.T
+
+    for i in range(p_xyz_t.shape[1]):
+        nrm = np.linalg.norm(p_xyz_t[:, i])
+        p_xyz_t[:, i] /= nrm
+
+    for i in range(p_xyz_r.shape[1]):
+        nrm = np.linalg.norm(p_xyz_r[:, i])
+        p_xyz_r[:, i] /= nrm
+
+    delay_chip = p_xyz_t + p_xyz_r
+    # delay_chip = np.linalg.norm(p_xyz_t, 2, axis=0) + np.linalg.norm(p_xyz_r, 2, axis=0)
     ele = ele.reshape(11, -1)
     delay_chip = (delay_chip / l_chip).reshape(11, -1)
 
     # index of the pixel with minimal reflection path
-    min_delay = np.min(delay_chip)
+    min_delay = np.nanmin(delay_chip)
     m_i, n_i = np.where(delay_chip == (np.min(delay_chip)))
 
+    return min_delay, m_i, n_i, ele
+
+
+def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
+    """% This code fine-tunes the coordinate of the initial SP based on the DTU10
+    % datum thorugh a number of iterative steps."""
+    lat_bin, lon_bin, lat_bin_v, lon_bin_v = finetune_p1(sx_lla, L)
+    ele = model((lon_bin_v, lat_bin_v))
+    p_x, p_y, p_z = pyproj.transform(
+        lla, ecef, *[lon_bin_v, lat_bin_v, ele], radians=False
+    )
+    p_xyz = np.array([p_x, p_y, p_z])
+    min_delay, m_i, n_i, ele = finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele)
     # unpack arrays with [0] else they keep nesting
     sx_temp = [lat_bin[m_i][0], lon_bin[n_i][0], ele[m_i, n_i][0]]
-    # TODO we calculate geodesic distance between points in metres - replaces m_lldist.m
     # this is between Matlab idx = 5,6 so extra "-1" due to python 0-indexing (Mat5,6 -> Py4,5)
     NN = int((num_grid - 1) / 2) - 1
+    # TODO we calculate geodesic distance between points in metres - replaces m_lldist.m
     res = geo_dist.geodesic(
         (lat_bin[NN], lon_bin[NN]), (lat_bin[NN + 1], lon_bin[NN + 1])
     ).m
@@ -386,6 +421,7 @@ def ecef2orf(P, V, S_ecef):
     return theta_orf, phi_orf
 
 
+@njit
 def deg2rad(degrees):
     radians = degrees * math.pi / 180
     return radians
@@ -416,9 +452,9 @@ def ecef2brf(P, V, S_ecef, SC_att):
     u_ecef = S_ecef - P  # vector from P to S
 
     # define heading frame - unit vectors
-    y_hrf = np.cross(-1 * P, V) / np.linalg.norm(np.cross(-1 * P, V), 2)
-    z_hrf = -1 * P / np.linalg.norm(-1 * P, 2)
-    x_hrf = np.cross(y_hrf, z_hrf)
+    y_hrf = np.cross(-1 * P, V) / np.linalg.norm(np.cross(-1 * P, V), 2).T
+    z_hrf = -1 * P / np.linalg.norm(-1 * P, 2).T
+    x_hrf = np.cross(y_hrf, z_hrf).T
 
     T_hrf = np.array([x_hrf.T, y_hrf.T, z_hrf.T])
 
@@ -464,6 +500,7 @@ def ecef2brf(P, V, S_ecef, SC_att):
     return theta_brf, phi_brf
 
 
+@njit
 def cart2sph(x, y, z):
     xy = x**2 + y**2
     r = math.sqrt(xy + z**2)
