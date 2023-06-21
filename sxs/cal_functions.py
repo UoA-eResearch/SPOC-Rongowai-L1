@@ -33,7 +33,7 @@ def power2db(power):
 
 
 def db2power(db):
-    return np.power(10, db / 10)
+    return np.power(10, np.divide(db, 10))
 
 
 def L1a_counts2watts(ddm_counts, ANZ_port, std_dev):
