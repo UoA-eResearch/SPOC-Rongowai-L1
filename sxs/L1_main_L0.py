@@ -34,14 +34,15 @@ from specular import (
     get_chi2,
     get_specular_bin,
     get_ddm_Aeff4,
-    ddm_brcs,
+    ddm_brcs2,
     get_ddm_nbrcs2,
-    ddm_refl,
+    ddm_refl2,
     get_fresnel,
     coh_det,
     meter2chips,
     delay_correction,
     deldop,
+    los_status,
 )
 
 # Required to load the land cover mask file
@@ -181,18 +182,18 @@ lcv_mask = Image.open(lcv_path.joinpath(lcv_filename))
 # process inland water mask
 pek_path = Path().absolute().joinpath(Path("./dat/pek/"))
 
-# water_mask = {}
-# for path in [
-#     "160E_40S",
-#     "170E_30S",
-#     "170E_40S",
-# ]:
-#     water_mask[path] = {}
-#     pek_file = rasterio.open(pek_path.joinpath("occurrence_" + path + ".tif"))
-#     water_mask[path]["lon_min"] = pek_file._transform[0]
-#     water_mask[path]["res_deg"] = pek_file._transform[1]
-#     water_mask[path]["lat_max"] = pek_file._transform[3]
-#     water_mask[path]["data"] = pek_file.read(1)
+water_mask = {}
+for path in [
+    "160E_40S",
+    # "170E_30S",
+    # "170E_40S",
+]:
+    water_mask[path] = {}
+    pek_file = rasterio.open(pek_path.joinpath("occurrence_" + path + ".tif"))
+    water_mask[path]["lon_min"] = pek_file._transform[0]
+    water_mask[path]["res_deg"] = pek_file._transform[1]
+    water_mask[path]["lat_max"] = pek_file._transform[3]
+    water_mask[path]["data"] = pek_file.read(1)
 
 # load PRN-SV and SV-EIRP(static) LUT
 gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
@@ -287,12 +288,7 @@ rx_pos_lla = [lat, lon, alt]
 
 # determine specular point "over land" flag from landmask
 # replaces get_map_value function
-status_flags_one_hz = interpn(
-    points=(landmask_nz["lon"], landmask_nz["lat"]),
-    values=landmask_nz["ele"],
-    xi=(lon, lat),
-    method="linear",
-)
+status_flags_one_hz = landmask_nz((lon, lat))
 status_flags_one_hz[status_flags_one_hz > 0] = 5
 status_flags_one_hz[status_flags_one_hz <= 0] = 4
 
@@ -534,7 +530,7 @@ L1_postCal["ddm_ant"] = ddm_ant  # 0-based
 #   # --------------------- Part 4A: SP solver and geometries
 # initialise variables
 # initialise a huge amount of empty arrays
-"""
+
 sx_pos_x = np.full([*transmitter_id.shape], np.nan)
 sx_pos_y = np.full([*transmitter_id.shape], np.nan)
 sx_pos_z = np.full([*transmitter_id.shape], np.nan)
@@ -575,12 +571,14 @@ sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
 # iterate over each second of flight
 for sec in range(len(transmitter_id)):
     t0 = timer()
-    tn = timer()
+    tn = 0
     # retrieve rx positions, velocities and attitdues
     # bundle up craft pos/vel/attitude data into per sec, and rx1
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
     rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
-    rx_attitude1 = np.array([rx_roll[sec], rx_pitch[sec], rx_yaw[sec]])
+    # Euler angels are now in radians and yaw is resp. North
+    # TODO adjust this hardcode if necessary
+    rx_attitude1 = np.array([rx_roll[sec], rx_pitch[sec], 0])  # rx_yaw[sec]])
     rx1 = {
         "rx_pos_xyz": rx_pos_xyz1,
         "rx_vel_xyz": rx_vel_xyz1,
@@ -617,45 +615,46 @@ for sec in range(len(transmitter_id)):
         # only process these with valid TX positions
         # TODO is checking only pos_x enough? it could be.
         if not np.isnan(tx_pos_x[sec][ngrx_channel]):
-            tn1 = timer()
-
-            # Part 4.1: SP solver
-            # derive SP positions, angle of incidence and distance to coast
-            # returning sx_pos_lla1 in Py version to avoid needless coord conversions
-            (
-                sx_pos_xyz1,
-                inc_angle_deg1,
-                d_snell_deg1,
-                dist_to_coast_km1,
-                LOS_flag1,
-            ) = sp_solver(tx_pos_xyz1, rx_pos_xyz1, dem, dtu10, landmask_nz)
-
-            lon, lat, alt = pyproj.transform(ecef, lla, *sx_pos_xyz1, radians=False)
-            sx_pos_lla1 = [lat, lon, alt]
+            LOS_flag1 = los_status(tx_pos_xyz1, rx_pos_xyz1)
 
             LOS_flag[sec][ngrx_channel] = int(LOS_flag1)
 
             # only process samples with valid sx positions, i.e., LOS = True
             if LOS_flag1:
-                # <lon,lat,alt> of the specular reflection
-                # algorithm version 1.11
-                surface_type1 = get_surf_type2(
-                    sx_pos_lla1, landmask_nz, lcv_mask, water_mask
-                )
+                tn1 = timer()
 
-                # only process samples with valid sx positions, i.e., LOS = 1
+                # Part 4.1: SP solver
+                # derive SP positions, angle of incidence and distance to coast
+                # returning sx_pos_lla1 in Py version to avoid needless coord conversions
                 # derive sx velocity
                 # time step in second
                 dt = 1
-                tx_pos_xyz_dt = tx_pos_xyz1 + tx_vel_xyz1  # dt* no point if this is 1s
-                rx_pos_xyz_dt = rx_pos_xyz1 + rx_vel_xyz1
+                tx_pos_xyz_dt = tx_pos_xyz1 + (dt * tx_vel_xyz1)
+                rx_pos_xyz_dt = rx_pos_xyz1 + (dt * rx_vel_xyz1)
+                (
+                    sx_pos_xyz1,
+                    inc_angle_deg1,
+                    d_snell_deg1,
+                    dist_to_coast_km1,
+                    # LOS_flag1,
+                ) = sp_solver(tx_pos_xyz1, rx_pos_xyz1, dem, dtu10, landmask_nz)
+
                 (
                     sx_pos_xyz_dt,
                     _,
                     _,
                     _,
-                    _,
+                    # _,
                 ) = sp_solver(tx_pos_xyz_dt, rx_pos_xyz_dt, dem, dtu10, landmask_nz)
+                tn += timer() - tn1
+
+                lon, lat, alt = pyproj.transform(ecef, lla, *sx_pos_xyz1, radians=False)
+                sx_pos_lla1 = [lat, lon, alt]
+                # <lon,lat,alt> of the specular reflection
+                # algorithm version 1.11
+                surface_type1 = get_surf_type2(
+                    sx_pos_lla1, landmask_nz, lcv_mask, water_mask
+                )
 
                 # TODO: here get large difference from matlab version
                 sx_vel_xyz1 = np.array(sx_pos_xyz_dt) - np.array(sx_pos_xyz1)
@@ -679,8 +678,6 @@ for sec in range(len(transmitter_id)):
                 sx_inc_angle[sec][ngrx_channel] = inc_angle_deg1
                 sx_d_snell_angle[sec][ngrx_channel] = d_snell_deg1
                 dist_to_coast_km[sec][ngrx_channel] = dist_to_coast_km1
-
-                tn += timer() - tn1
 
                 # Part 4.2: SP-related variables - 1
                 # this part derives tx/rx gains, ranges and other related variables
@@ -732,7 +729,8 @@ for sec in range(len(transmitter_id)):
     print(
         f"******** start processing part 4A {sec} second data with {timer() - t0} ********"
     )
-    print(f"*{timer() - tn}*")
+    print(f"*{tn}*")
+
 # expand to RHCP channels
 sx_pos_x[:, J_2:J] = sx_pos_x[:, 0:J_2]
 sx_pos_y[:, J_2:J] = sx_pos_y[:, 0:J_2]
@@ -1151,16 +1149,99 @@ L1_postCal["sp_ngrx_dopp_correction"] = sp_doppler_error
 
 
 # Part 5: Copol and xpol BRCS, reflectivity, peak reflectivity
+
 # separate copol and xpol gain for using later
-# rx_gain_copol_LL = sx_rx_gain_copol(1:10,:);
-# rx_gain_copol_RR = sx_rx_gain_copol(11:20,:);
+rx_gain_copol_LL = sx_rx_gain_copol[:, :10]
+rx_gain_copol_RR = sx_rx_gain_copol[:, :20]
 
-# rx_gain_xpol_RL = sx_rx_gain_xpol(1:10,:);
-# rx_gain_xpol_LR = sx_rx_gain_xpol(11:20,:);
+rx_gain_xpol_RL = sx_rx_gain_xpol[:, :10]
+rx_gain_xpol_LR = sx_rx_gain_xpol[:, :20]
 
+# BRCS, reflectivity
+pol_shape = [*raw_counts.shape]
+pol_shape[1] = J_2
+brcs_copol = np.full([*pol_shape], np.nan)
+brcs_xpol = np.full([*pol_shape], np.nan)
 
+refl_copol = np.full([*pol_shape], np.nan)
+refl_xpol = np.full([*pol_shape], np.nan)
+
+sp_refl = np.full([*transmitter_id.shape], np.nan)
 norm_refl_waveform = np.full([*transmitter_id.shape, 40, 1], np.nan)
 
+# TODO draw these from a config file, here and in other places
+cable_loss_db_LHCP = 0.6600
+cable_loss_db_RHCP = 0.5840
+powloss_LHCP = db2power(cable_loss_db_LHCP)
+powloss_RHCP = db2power(cable_loss_db_RHCP)
+
+for sec in range(len(transmitter_id)):
+    t0 = timer()
+    for ngrx_channel in range(J_2):
+        # compensate cable loss
+        power_analog_LHCP1 = power_analog[sec, ngrx_channel, :, :] * powloss_LHCP
+        power_analog_RHCP1 = power_analog[sec, ngrx_channel + J_2, :, :] * powloss_RHCP
+
+        R_tsx1 = tx_to_sp_range[sec][ngrx_channel]
+        R_rsx1 = rx_to_sp_range[sec][ngrx_channel]
+        rx_gain_dbi_1 = [
+            rx_gain_copol_LL[sec][ngrx_channel],
+            rx_gain_xpol_RL[sec][ngrx_channel],
+            rx_gain_xpol_LR[sec][ngrx_channel],
+            rx_gain_copol_RR[sec][ngrx_channel],
+        ]
+        gps_eirp1 = static_gps_eirp[sec][ngrx_channel]
+
+        if not np.isnan(power_analog_LHCP1).all():
+            brcs_copol1, brcs_xpol1 = ddm_brcs2(
+                power_analog_LHCP1,
+                power_analog_RHCP1,
+                gps_eirp1,
+                rx_gain_dbi_1,
+                R_tsx1,
+                R_rsx1,
+            )
+            refl_copol1, refl_xpol1 = ddm_refl2(
+                power_analog_LHCP1,
+                power_analog_RHCP1,
+                gps_eirp1,
+                rx_gain_dbi_1,
+                R_tsx1,
+                R_rsx1,
+            )
+
+            # reflectivity at SP
+            sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel]) + 1
+            sp_doppler_col1 = np.floor(sp_doppler_col[sec][ngrx_channel]) + 1
+
+            if (0 < sp_delay_row1 < 40) and (0 < sp_doppler_col1 < 5):
+                sp_refl_copol1 = refl_copol1[int(sp_delay_row1), int(sp_doppler_col1)]
+                sp_refl_xpol1 = refl_xpol1[int(sp_delay_row1), int(sp_doppler_col1)]
+            else:
+                sp_refl_copol1 = np.nan
+                sp_refl_xpol1 = np.nan
+
+            refl_waveform_copol1 = np.sum(refl_copol1, axis=1)
+            norm_refl_waveform_copol1 = np.divide(
+                refl_waveform_copol1, np.nanmax(refl_waveform_copol1)
+            )
+
+            refl_waveform_xpol1 = np.sum(refl_xpol1, axis=1)
+            norm_refl_waveform_xpol1 = np.divide(
+                refl_waveform_xpol1, np.nanmax(refl_waveform_xpol1)
+            )
+
+            brcs_copol[sec][ngrx_channel] = brcs_copol1
+            brcs_xpol[sec][ngrx_channel] = brcs_xpol1
+
+            refl_copol[sec][ngrx_channel] = refl_copol1
+            refl_xpol[sec][ngrx_channel] = refl_xpol1
+
+            sp_refl[sec][ngrx_channel] = sp_refl_copol1
+            sp_refl[sec][ngrx_channel + J_2] = sp_refl_xpol1
+
+            norm_refl_waveform[sec][ngrx_channel] = norm_refl_waveform_copol1
+            norm_refl_waveform[sec][ngrx_channel + J_2] = norm_refl_waveform_xpol1
 
 """
 # derive brcs, nbrcs, and other parameters
