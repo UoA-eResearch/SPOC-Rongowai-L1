@@ -166,12 +166,7 @@ def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
     # Vectorise the 11*11 nested loop
     lat_bin_v = np.repeat(lat_bin, 11)
     lon_bin_v = np.tile(lon_bin, 11)
-    ele = interpn(
-        points=(model["lon"], model["lat"]),
-        values=model["ele"],
-        xi=(lon_bin_v, lat_bin_v),
-        method="linear",
-    )
+    ele = model((lon_bin_v, lat_bin_v))
     p_x, p_y, p_z = pyproj.transform(
         lla, ecef, *[lon_bin_v, lat_bin_v, ele], radians=False
     )
@@ -295,11 +290,11 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     % 4) LOS flag"""
 
     # check if LOS exists
-    LOS_flag = los_status(tx_pos_xyz, rx_pos_xyz)
+    # LOS_flag = los_status(tx_pos_xyz, rx_pos_xyz)
 
-    if not LOS_flag:
-        # no sx if no LOS between rx and tx
-        return [np.nan, np.nan, np.nan], np.nan, np.nan, np.nan, LOS_flag
+    # if not LOS_flag:
+    #    # no sx if no LOS between rx and tx
+    #    return [np.nan, np.nan, np.nan], np.nan, np.nan, np.nan, LOS_flag
 
     # derive SP coordinate on WGS84 and DTU10
     # TODO: result is slightly not the same with matlab code
@@ -318,12 +313,7 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     # sx_pos_xyz = pyproj.transform(lla, ecef, *sx_pos_lla, radians=False)
     # replaces get_map_value function
     # TODO Q: the resualt is not the same as get_map_value
-    dist = interpn(
-        points=(dist_to_coast_nz["lon"], dist_to_coast_nz["lat"]),
-        values=dist_to_coast_nz["ele"],
-        xi=(sx_pos_lla[1], sx_pos_lla[0]),
-        method="linear",
-    )
+    dist = dist_to_coast_nz((sx_pos_lla[1], sx_pos_lla[0]))
     # dist = get_map_value(sx_pos_lla[0], sx_pos_lla[1], dist_to_coast_nz)
 
     local_dem = get_local_dem(sx_pos_lla, dem, dtu10, dist)
@@ -339,7 +329,7 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
         local_height = local_height[1, 1]  # local height of the SP
 
         # projection to local dem
-        term1 = np.array(sx_xyz_coarse) / np.linalg.norm(sx_xyz_coarse)
+        term1 = np.array(sx_xyz_coarse) / np.linalg.norm(sx_xyz_coarse, 2)
         term2 = term1.dot(local_height)
         sx_pos_xyz = np.array(sx_xyz_coarse) + term2
 
@@ -354,7 +344,7 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     d_phi = np.rad2deg(np.arctan(d_phi1))
     d_snell_deg = abs(theta_i - theta_s) + abs(d_phi)
 
-    return sx_pos_xyz, inc_angle_deg, d_snell_deg, dist, LOS_flag
+    return sx_pos_xyz, inc_angle_deg, d_snell_deg, dist  # , LOS_flag
 
 
 def ecef2orf(P, V, S_ecef):
@@ -378,8 +368,8 @@ def ecef2orf(P, V, S_ecef):
     Vi = V + np.cross(W_e, P)  # SC ECEF inertial velocity vector
 
     # define orbit reference frame - unit vectors
-    y_orf = np.cross(-1 * P, Vi) / np.linalg.norm(np.cross(-1 * P, Vi))
-    z_orf = -1 * P / np.linalg.norm(P)
+    y_orf = np.cross(-1 * P, Vi) / np.linalg.norm(np.cross(-1 * P, Vi), 2)
+    z_orf = -1 * P / np.linalg.norm(P, 2)
     x_orf = np.cross(y_orf, z_orf)
 
     # transformation matrix
@@ -387,7 +377,7 @@ def ecef2orf(P, V, S_ecef):
     S_orf = np.dot(T_orf, u_ecef)
 
     # elevation and azimuth angles
-    theta_orf = np.rad2deg(np.arccos(S_orf[2] / (np.linalg.norm(S_orf))))
+    theta_orf = np.rad2deg(np.arccos(S_orf[2] / (np.linalg.norm(S_orf, 2))))
     phi_orf = math.degrees(math.atan2(S_orf[1], S_orf[0]))
 
     if phi_orf < 0:
@@ -418,16 +408,16 @@ def ecef2brf(P, V, S_ecef, SC_att):
     V = V.T
     S_ecef = np.array(S_ecef).T
 
-    phi = deg2rad(SC_att[0])  # roll
-    theta = deg2rad(SC_att[1])  # pitch
-    psi = deg2rad(SC_att[2])  # yaw
+    phi = SC_att[0]  # roll
+    theta = SC_att[1]  # pitch
+    psi = SC_att[2]  # yaw
 
     # TODO: the result is different from the matlab code, since the input is slightly different
     u_ecef = S_ecef - P  # vector from P to S
 
     # define heading frame - unit vectors
-    y_hrf = np.cross(-1 * P, V) / np.linalg.norm(np.cross(-1 * P, V))
-    z_hrf = -1 * P / np.linalg.norm(-1 * P)
+    y_hrf = np.cross(-1 * P, V) / np.linalg.norm(np.cross(-1 * P, V), 2)
+    z_hrf = -1 * P / np.linalg.norm(-1 * P, 2)
     x_hrf = np.cross(y_hrf, z_hrf)
 
     T_hrf = np.array([x_hrf.T, y_hrf.T, z_hrf.T])
@@ -465,7 +455,7 @@ def ecef2brf(P, V, S_ecef, SC_att):
     S_brf = np.dot(R, S_hrf.T)
 
     # TODO: the result slightly different from the matlab code
-    theta_brf = np.rad2deg(np.arccos(S_brf[2] / (np.linalg.norm(S_brf))))
+    theta_brf = np.rad2deg(np.arccos(S_brf[2] / (np.linalg.norm(S_brf, 2))))
     phi_brf = math.degrees(math.atan2(S_brf[1], S_brf[0]))
 
     if phi_brf < 0:
@@ -542,8 +532,8 @@ def sp_related(tx, rx, sx_pos_xyz, SV_eirp_LUT):
     sp_angle_enu = [sp_theta_enu, sp_az_enu]
 
     # compute ranges
-    R_tsx = np.linalg.norm(sx_pos_xyz - tx_pos_xyz)  # range from tx to sx
-    R_rsx = np.linalg.norm(sx_pos_xyz - rx_pos_xyz)  # range from rx to sx
+    R_tsx = np.linalg.norm(sx_pos_xyz - tx_pos_xyz, 2)  # range from tx to sx
+    R_rsx = np.linalg.norm(sx_pos_xyz - rx_pos_xyz, 2)  # range from rx to sx
 
     range = [R_tsx, R_rsx]
 
@@ -738,13 +728,13 @@ def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
     _lambda = c / fc  # wavelength
 
     V_tp = tx_pos_xyz - p_xyz
-    R_tp = np.linalg.norm(V_tp)
+    R_tp = np.linalg.norm(V_tp, 2)
     V_tp_unit = V_tp / R_tp
     V_rp = rx_pos_xyz - p_xyz
-    R_rp = np.linalg.norm(V_rp)
+    R_rp = np.linalg.norm(V_rp, 2)
     V_rp_unit = V_rp / R_rp
     V_tr = tx_pos_xyz - rx_pos_xyz
-    R_tr = np.linalg.norm(V_tr)
+    R_tr = np.linalg.norm(V_tr, 2)
 
     delay = R_tp + R_rp
     delay_chips = meter2chips(delay)
@@ -861,8 +851,8 @@ def get_specular_bin(tx, rx, sx, ddm):
 
 
 def get_ddm_Aeff4():
-
     return True
+
 
 def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
     """
@@ -1010,6 +1000,38 @@ def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
     return A_eff, A_eff_all
 
 
+def ddm_brcs2(power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, TSx, RSx):
+    """
+    This version has copol xpol antenna gain implemented
+    This function computes bistatic radar cross section (BRCS) according to
+    Bistatic radar equation based on the inputs as below
+    inputs:
+    1) power_analog: L1a product in watts
+    2) eirp_watt, rx_gain_db_i: gps eirp in watts and rx antenna gain in dBi
+    3) TSx, RSx: Tx to Sx and Rx to Sx ranges
+    outputs:
+    1) brcs: bistatic RCS
+    """
+    # define constants
+    f = 1575.42e6  # GPS L1 band, Hz
+    _lambda = constants.c / f  # wavelength, m
+    _lambda2 = _lambda * _lambda
+
+    # derive BRCS
+    rx_gain = db2power(rx_gain_db_i)  # linear rx gain
+
+    term1 = 4 * math.pi * np.power(4 * math.pi * TSx * RSx, 2)
+    term2 = eirp_watt * _lambda2
+    term3 = term1 / term2
+    term4 = term3 * np.power(rx_gain, -1)
+
+    # TODO check that this 2x2 maps properly to the 1x4 structure in Python
+    brcs_copol = (term4[0] * power_analog_LHCP) + (term4[1] * power_analog_RHCP)
+    brcs_xpol = (term4[2] * power_analog_LHCP) + (term4[3] * power_analog_RHCP)
+
+    return brcs_copol, brcs_xpol
+
+
 def ddm_brcs(power_analog, eirp_watt, rx_gain_db_i, TSx, RSx):
     """
     this function computes bistatic radar cross section (BRCS) according to
@@ -1107,6 +1129,37 @@ def get_ddm_nbrcs2(brcs, A_eff, sx_bin, flag):
     return nbrcs, nbrcs_scatter
 
 
+def ddm_refl2(
+    power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, R_tsx, R_rsx
+):
+    """
+    This function computes the land reflectivity by implementing the xpol
+    antenna gain
+    1)power_analog: L1a product, DDM power in watt
+    2)eirp_watt: transmitter eirp in watt
+    3)rx_gain_db_i: receiver antenna gain in the direction of SP, in dBi
+    4)R_tsx, R_rsx: tx to sp range and rx to sp range, in meters
+    outputs
+    1) copol and xpol reflectivity
+    """
+    # define constants
+    freq = 1575.42e6  # GPS L1 operating frequency, Hz
+    _lambda = constants.c / freq  # wavelength, meter
+    _lambda2 = _lambda * _lambda
+
+    rx_gain = db2power(rx_gain_db_i)  # convert antenna gain to linear form
+
+    term1 = np.power(4 * math.pi * (R_tsx + R_rsx), 2)
+    term2 = eirp_watt * _lambda2
+    term3 = term1 / term2
+
+    term4 = term3 * np.power(rx_gain, -1)
+
+    refl_copol = term4[0] * power_analog_LHCP + term4[1] * power_analog_RHCP
+    refl_xpol = term4[2] * power_analog_LHCP + term4[3] * power_analog_RHCP
+    return refl_copol, refl_xpol
+
+
 def ddm_refl(power_analog, eirp_watt, rx_gain_db_i, R_tsx, R_rsx):
     """
     this function computes the land reflectivity
@@ -1151,8 +1204,8 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     _lambda = c / fc  # wavelength
 
     # compute dimensions
-    R_tsp = np.linalg.norm(np.array(tx_pos_xyz) - np.array(sx_pos_xyz))
-    R_rsp = np.linalg.norm(np.array(rx_pos_xyz) - np.array(sx_pos_xyz))
+    R_tsp = np.linalg.norm(np.array(tx_pos_xyz) - np.array(sx_pos_xyz), 2)
+    R_rsp = np.linalg.norm(np.array(rx_pos_xyz) - np.array(sx_pos_xyz), 2)
 
     term1 = R_tsp * R_rsp
     term2 = R_tsp + R_rsp
@@ -1175,7 +1228,7 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     unit_north = [0, 1]
 
     term3 = np.dot(vector_tr, unit_north)
-    term4 = np.linalg.norm(vector_tr) * np.linalg.norm(unit_north)
+    term4 = np.linalg.norm(vector_tr, 2) * np.linalg.norm(unit_north, 2)
 
     theta = math.degrees(math.acos(term3 / term4))
 

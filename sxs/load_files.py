@@ -9,7 +9,8 @@ import numpy as np
 import pandas as pd
 import os
 from pathlib import Path
-from scipy.interpolate import interp1d, interpn
+from scipy.interpolate import interp1d, interpn, RegularGridInterpolator
+
 
 # binary types for loading of gridded binary files
 grid_type_list = [
@@ -25,7 +26,7 @@ grid_type_list = [
 # grid_res = 30  # L may need to be updated in the future
 
 # define constants once, used in LOCAL_DEM function
-LOCAL_DEM_L = 18030
+LOCAL_DEM_L = 90
 LOCAL_DEM_RES = 30
 LOCAL_DEM_MARGIN = 0
 LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
@@ -182,10 +183,10 @@ def get_orbit_file(gps_week, gps_tow, start_obj, end_obj, change_idx=0):
         "IGS0OPSRAP_"
         + str(start_obj.year)
         + "{:03d}".format(start_obj.timetuple().tm_yday)  # match for the dropbox data
-        + "0000_01D_15M_ORB.sp3"
+        + "0000_01D_15M_ORB.SP3"
     )
     month_year = start_obj.strftime("%B %Y")
-    sp3_filename1_full = orbit_path.joinpath(Path(month_year), Path(sp3_filename1))
+    sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
     if not os.path.isfile(sp3_filename1_full):
         # try loading in alternate name
         sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".SP3"
@@ -229,11 +230,16 @@ def load_dat_file_grid(filepath):
         for field, field_type in grid_type_list:
             temp[field] = load_dat_file(f, field_type, 1)
         map_data = load_dat_file(f, "d", temp["num_lat"] * temp["num_lon"])
-    return {
+    data = {
         "lat": np.linspace(temp["lat_min"], temp["lat_max"], temp["num_lat"]),
         "lon": np.linspace(temp["lon_min"], temp["lon_max"], temp["num_lon"]),
         "ele": np.reshape(map_data, (-1, temp["num_lat"])),
     }
+
+    # create and return interpolator model for the grid file
+    return RegularGridInterpolator(
+        (data["lon"], data["lat"]), data["ele"], bounds_error=True
+    )
 
 
 def interp_ddm(x, y, x_ddm):
@@ -271,14 +277,11 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
             lon_index - LOCAL_HALF_NP : lon_index + LOCAL_HALF_NP + 1,
         ]
     else:
-        local_ele = interpn(
-            points=(dtu10["lon"], dtu10["lat"]),
-            values=dtu10["ele"],
-            xi=(
+        local_ele = dtu10(
+            (
                 np.tile(local_lon, LOCAL_NUM_PIXELS),
                 np.repeat(local_lat, LOCAL_NUM_PIXELS),
-            ),
-            method="linear",
+            )
         ).reshape(-1, LOCAL_NUM_PIXELS)
 
     return {"lat": local_lat, "lon": local_lon, "ele": local_ele}
@@ -447,12 +450,7 @@ def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
     # water_mask1 = water_mask[file_id]
     pek_value = get_pek_value(P[0], P[1], water_mask[file_id])
 
-    dist_coast = interpn(
-        points=(cst_mask["lon"], cst_mask["lat"]),
-        values=cst_mask["ele"],
-        xi=(P[1], P[0]),
-        method="linear",
-    )[0]
+    dist_coast = cst_mask((P[1], P[0]))
 
     if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
         # surface_type = 3  # not consistent with matlab code
