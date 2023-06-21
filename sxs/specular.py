@@ -187,14 +187,16 @@ def finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele):
     p_xyz_r = p_xyz_r.T
 
     for i in range(p_xyz_t.shape[1]):
-        nrm = np.linalg.norm(p_xyz_t[:, i])
-        p_xyz_t[:, i] /= nrm
+        nrm = np.linalg.norm(p_xyz_t[:, i], 2)
+        # assign first element as nrm
+        p_xyz_t[0, i] = nrm
 
     for i in range(p_xyz_r.shape[1]):
-        nrm = np.linalg.norm(p_xyz_r[:, i])
-        p_xyz_r[:, i] /= nrm
+        nrm = np.linalg.norm(p_xyz_r[:, i], 2)
+        # assign first element as nrm
+        p_xyz_r[0, i] = nrm
 
-    delay_chip = p_xyz_t + p_xyz_r
+    delay_chip = p_xyz_t[0, :] + p_xyz_r[0, :]
     # delay_chip = np.linalg.norm(p_xyz_t, 2, axis=0) + np.linalg.norm(p_xyz_r, 2, axis=0)
     ele = ele.reshape(11, -1)
     delay_chip = (delay_chip / l_chip).reshape(11, -1)
