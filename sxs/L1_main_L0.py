@@ -47,7 +47,6 @@ from projections import ecef2lla
 # Required to load the land cover mask file
 Image.MAX_IMAGE_PIXELS = None
 
-
 ### ---------------------- Prelaunch 1: Load L0 data
 
 # specify input L0 netcdf file
@@ -192,7 +191,7 @@ for path in [
     water_mask[path]["lon_min"] = pek_file._transform[0]
     water_mask[path]["res_deg"] = pek_file._transform[1]
     water_mask[path]["lat_max"] = pek_file._transform[3]
-    water_mask[path]["file"] = pek_file
+    water_mask[path]["data"] = pek_file.read(1)
 
 # load PRN-SV and SV-EIRP(static) LUT
 gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
