@@ -175,7 +175,7 @@ def finetune_p1(sx_lla, L):
     return lat_bin, lon_bin, lat_bin_v, lon_bin_v
 
 
-# @njit
+@njit
 def finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele):
     p_xyz_t = p_xyz - tx_xyz.reshape(-1, 1)
     p_xyz_r = np.repeat(rx_xyz, len(p_x))
