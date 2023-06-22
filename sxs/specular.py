@@ -175,24 +175,25 @@ def finetune_p1(sx_lla, L):
     return lat_bin, lon_bin, lat_bin_v, lon_bin_v
 
 
-@njit
+# @njit
 def finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele):
     p_xyz_t = p_xyz - tx_xyz.reshape(-1, 1)
     p_xyz_r = np.repeat(rx_xyz, len(p_x))
-    p_xyz_r = p_xyz_r.reshape(-1, 3) - p_xyz.T
-    p_xyz_r = p_xyz_r.T
+    p_xyz_r_new1 = p_xyz_r.reshape(3, -1)
+    p_xyz_r_new2 = p_xyz_r_new1 - p_xyz
 
     for i in range(p_xyz_t.shape[1]):
         nrm = np.linalg.norm(p_xyz_t[:, i], 2)
         # assign first element as nrm
         p_xyz_t[0, i] = nrm
 
-    for i in range(p_xyz_r.shape[1]):
-        nrm = np.linalg.norm(p_xyz_r[:, i], 2)
+    for i in range(p_xyz_r_new2.shape[1]):
+        tmp = p_xyz_r_new2[:, i]
+        nrm = np.linalg.norm(p_xyz_r_new2[:, i], 2)
         # assign first element as nrm
-        p_xyz_r[0, i] = nrm
+        p_xyz_r_new2[0, i] = nrm
 
-    delay_chip = p_xyz_t[0, :] + p_xyz_r[0, :]
+    delay_chip = p_xyz_t[0, :] + p_xyz_r_new2[0, :]
     # delay_chip = np.linalg.norm(p_xyz_t, 2, axis=0) + np.linalg.norm(p_xyz_r, 2, axis=0)
     ele = ele.reshape(11, -1)
     delay_chip = (delay_chip / l_chip).reshape(11, -1)

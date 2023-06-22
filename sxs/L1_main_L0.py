@@ -184,15 +184,15 @@ pek_path = Path().absolute().joinpath(Path("./dat/pek/"))
 water_mask = {}
 for path in [
     "160E_40S",
-    # "170E_30S",
-    # "170E_40S",
+    "170E_30S",
+    "170E_40S",
 ]:
     water_mask[path] = {}
     pek_file = rasterio.open(pek_path.joinpath("occurrence_" + path + ".tif"))
     water_mask[path]["lon_min"] = pek_file._transform[0]
     water_mask[path]["res_deg"] = pek_file._transform[1]
     water_mask[path]["lat_max"] = pek_file._transform[3]
-    water_mask[path]["data"] = pek_file.read(1)
+    # water_mask[path]["data"] = pek_file.read(1)
 
 # load PRN-SV and SV-EIRP(static) LUT
 gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
@@ -795,7 +795,7 @@ L1_postCal["gps_off_boresight_angle_deg"] = gps_boresight  # checked ok
 L1_postCal["static_gps_eirp"] = static_gps_eirp  # checked ok
 L1_postCal["gps_tx_power_db_w"] = gps_tx_power_db_w  # checked ok
 L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
-"""
+
 
 ############# to save debug time, save and restore variables ##########
 #
@@ -1216,12 +1216,12 @@ for sec in range(len(transmitter_id)):
             refl_waveform_copol1 = np.sum(refl_copol1, axis=1)
             norm_refl_waveform_copol1 = np.divide(
                 refl_waveform_copol1, np.nanmax(refl_waveform_copol1)
-            )
+            ).reshape(40, -1)
 
             refl_waveform_xpol1 = np.sum(refl_xpol1, axis=1)
             norm_refl_waveform_xpol1 = np.divide(
                 refl_waveform_xpol1, np.nanmax(refl_waveform_xpol1)
-            )
+            ).reshape(40, -1)
 
             brcs_copol[sec][ngrx_channel] = brcs_copol1
             brcs_xpol[sec][ngrx_channel] = brcs_xpol1
@@ -1234,6 +1234,7 @@ for sec in range(len(transmitter_id)):
 
             norm_refl_waveform[sec][ngrx_channel] = norm_refl_waveform_copol1
             norm_refl_waveform[sec][ngrx_channel + J_2] = norm_refl_waveform_xpol1
+            print()
 
 """
 # derive brcs, nbrcs, and other parameters
