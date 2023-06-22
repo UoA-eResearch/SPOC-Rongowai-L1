@@ -192,7 +192,7 @@ for path in [
     water_mask[path]["lon_min"] = pek_file._transform[0]
     water_mask[path]["res_deg"] = pek_file._transform[1]
     water_mask[path]["lat_max"] = pek_file._transform[3]
-    # water_mask[path]["data"] = pek_file.read(1)
+    water_mask[path]["file"] = pek_file
 
 # load PRN-SV and SV-EIRP(static) LUT
 gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
