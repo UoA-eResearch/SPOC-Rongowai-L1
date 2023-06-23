@@ -1132,13 +1132,13 @@ for sec in range(len(transmitter_id)):
 
                 confidence_flag[sec][ngrx_channel] = confidence_flag1
 
-# TODO FIX these (stack them)
-noise_floor = [
-    np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_LHCP),
-    np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_RHCP),
-]
+noise_floor = np.hstack(
+    (
+        np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_LHCP),
+        np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_RHCP),
+    )
+)
 L1_postCal["noise_floor"] = noise_floor
-# TODO TO HERE
 
 confidence_flag[:, J_2:J] = confidence_flag[:, 0:J_2]
 

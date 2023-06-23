@@ -103,7 +103,6 @@ def ite(tx_pos_xyz, rx_pos_xyz):
             a = m_lambda
         else:
             b = m_mu
-    # TODO: stlightly different from matlab
     return nadir(m_lambda)
 
 
@@ -116,7 +115,6 @@ def coarsetune(tx_pos_xyz, rx_pos_xyz):
     % 1) SP_xyz, SP_lla: ECEF and LLA coordinate of a SP on a pure WGS84 datum"""
 
     # find coarse SP using Fibonacci sequence
-    # TODO: different from matlab from here, but the code looks fine
     SP_xyz_coarse = ite(tx_pos_xyz, rx_pos_xyz)
     SP_lla_coarse = ecef2lla.transform(*SP_xyz_coarse, radians=False)
     # longitude adjustment
@@ -221,7 +219,7 @@ def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
     sx_temp = [lat_bin[m_i][0], lon_bin[n_i][0], ele[m_i, n_i][0]]
     # this is between Matlab idx = 5,6 so extra "-1" due to python 0-indexing (Mat5,6 -> Py4,5)
     NN = int((num_grid - 1) / 2) - 1
-    # TODO we calculate geodesic distance between points in metres - replaces m_lldist.m
+    # We calculate geodesic distance between points in metres - replaces m_lldist.m
     res = geo_dist.geodesic(
         (lat_bin[NN], lon_bin[NN]), (lat_bin[NN + 1], lon_bin[NN + 1])
     ).m
@@ -333,7 +331,6 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     #    return [np.nan, np.nan, np.nan], np.nan, np.nan, np.nan, LOS_flag
 
     # derive SP coordinate on WGS84 and DTU10
-    # TODO: result is slightly not the same with matlab code
     sx_xyz_coarse, sx_lla_coarse = coarsetune(tx_pos_xyz, rx_pos_xyz)
 
     # initial searching region in degrees
@@ -342,13 +339,11 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     res_ocean_meter = 0.01
 
     # derive local angles
-    # TODO: result is slightly different from matlab code
     sx_pos_xyz, sx_pos_lla = finetune_ocean(
         tx_pos_xyz, rx_pos_xyz, sx_lla_coarse, dtu10, L_ocean_deg, res_ocean_meter
     )
     # sx_pos_xyz = lla2ecef.transform(*sx_pos_lla, radians=False)
     # replaces get_map_value function
-    # TODO Q: the resualt is not the same as get_map_value
     dist = dist_to_coast_nz((sx_pos_lla[1], sx_pos_lla[0]))
     # dist = get_map_value(sx_pos_lla[0], sx_pos_lla[1], dist_to_coast_nz)
 
@@ -449,7 +444,6 @@ def ecef2brf(P, V, S_ecef, SC_att):
     theta = SC_att[1]  # pitch
     psi = SC_att[2]  # yaw
 
-    # TODO: the result is different from the matlab code, since the input is slightly different
     u_ecef = S_ecef - P  # vector from P to S
 
     # define heading frame - unit vectors
@@ -459,7 +453,7 @@ def ecef2brf(P, V, S_ecef, SC_att):
 
     T_hrf = np.array([x_hrf.T, y_hrf.T, z_hrf.T])
 
-    # S in hrf  TODO: the result is different from the matlab code since u_ecef is slightly different
+    # S in hrf
     S_hrf = np.dot(T_hrf, u_ecef)
 
     # construct aircraft's attitude matrix
@@ -491,7 +485,6 @@ def ecef2brf(P, V, S_ecef, SC_att):
 
     S_brf = np.dot(R, S_hrf.T)
 
-    # TODO: the result slightly different from the matlab code
     theta_brf = np.rad2deg(np.arccos(S_brf[2] / (np.linalg.norm(S_brf, 2))))
     phi_brf = math.degrees(math.atan2(S_brf[1], S_brf[0]))
 
@@ -524,7 +517,6 @@ def ecef2enuf(P, S_ecef):
     # S_ecef = [-4590047.30433596,	610685.547457113,	-4371634.83935421]
 
     lon, lat, alt = ecef2lla.transform(*P, radians=False)
-    # TODO: The difference is gradually magnified.
     S_east, S_north, S_up = pm.ecef2enu(*S_ecef, lat, lon, alt, deg=True)
     phi_enuf, theta_enuf1, _ = cart2sph(S_east, S_north, S_up)
 
@@ -782,7 +774,6 @@ def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
     term1 = np.dot(tx_vel_xyz, V_tp_unit)
     term2 = np.dot(rx_vel_xyz, V_rp_unit)
 
-    # TODO: slightly different from the matlab version from V_rp_unit
     doppler_hz = -1 * (term1 + term2) / _lambda  # Doppler in Hz
 
     return delay_chips, doppler_hz, add_delay_chips
@@ -960,18 +951,6 @@ def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
             delay_coarse[m, n] = delay_p1 - delay_chips_sx
             doppler_coarse[m, n] = doppler_p1 - doppler_Hz_sx  # diff < 1 / e3
 
-    # interpolate to 30-m resolution, TODO: slighly different from matlab, diff < 0.1 / e2
-    # xx, yy = np.meshgrid(local_lon, local_lat)
-    # points_out = np.array((xx.ravel(), yy.ravel())).T
-    # delay_chips = interpn(points=(lon_coarse, lat_coarse),
-    #                       values=delay_coarse,
-    #                       xi=points_out,
-    #                       method='cubic').reshape(len(local_lon), len(local_lat))
-    # doppler_Hz = interpn(points=(lon_coarse, lat_coarse),
-    #                      values=doppler_coarse,
-    #                      xi=points_out,
-    #                      method='cubic').reshape(len(local_lon), len(local_lat))
-    # 141.76s
     interp_delay_chips = interp2d(lon_coarse, lat_coarse, delay_coarse, kind="cubic")
     delay_chips = interp_delay_chips(local_lon, local_lat)
     delay_chips = np.flipud(delay_chips)
@@ -1057,15 +1036,15 @@ def ddm_brcs2(power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, TSx
 
     # derive BRCS
     rx_gain = db2power(rx_gain_db_i)  # linear rx gain
-
+    rx_gain2 = rx_gain.reshape(2, 2)
     term1 = 4 * math.pi * np.power(4 * math.pi * TSx * RSx, 2)
     term2 = eirp_watt * _lambda2
     term3 = term1 / term2
-    term4 = term3 * np.power(rx_gain, -1)
+    # term4 = term3 * np.power(rx_gain2, -1)
+    term4 = term3 * np.linalg.matrix_power(rx_gain2, -1)
 
-    # TODO check that this 2x2 maps properly to the 1x4 structure in Python
-    brcs_copol = (term4[0] * power_analog_LHCP) + (term4[1] * power_analog_RHCP)
-    brcs_xpol = (term4[2] * power_analog_LHCP) + (term4[3] * power_analog_RHCP)
+    brcs_copol = (term4[0, 0] * power_analog_LHCP) + (term4[0, 1] * power_analog_RHCP)
+    brcs_xpol = (term4[1, 0] * power_analog_LHCP) + (term4[1, 1] * power_analog_RHCP)
 
     return brcs_copol, brcs_xpol
 
@@ -1186,15 +1165,17 @@ def ddm_refl2(
     _lambda2 = _lambda * _lambda
 
     rx_gain = db2power(rx_gain_db_i)  # convert antenna gain to linear form
+    rx_gain2 = rx_gain.reshape(2, 2)
 
     term1 = np.power(4 * math.pi * (R_tsx + R_rsx), 2)
     term2 = eirp_watt * _lambda2
     term3 = term1 / term2
 
-    term4 = term3 * np.power(rx_gain, -1)
+    # term4 = term3 * np.power(rx_gain, -1)
+    term4 = term3 * np.linalg.matrix_power(rx_gain2, -1)
 
-    refl_copol = term4[0] * power_analog_LHCP + term4[1] * power_analog_RHCP
-    refl_xpol = term4[2] * power_analog_LHCP + term4[3] * power_analog_RHCP
+    refl_copol = term4[0, 0] * power_analog_LHCP + term4[0, 1] * power_analog_RHCP
+    refl_xpol = term4[1, 0] * power_analog_LHCP + term4[1, 1] * power_analog_RHCP
     return refl_copol, refl_xpol
 
 
