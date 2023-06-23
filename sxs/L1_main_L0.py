@@ -559,6 +559,7 @@ static_gps_eirp = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_copol = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
 
+"""
 # iterate over each second of flight
 for sec in range(len(transmitter_id)):
     t0 = timer()
@@ -568,7 +569,7 @@ for sec in range(len(transmitter_id)):
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
     rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
     # Euler angels are now in radians and yaw is resp. North
-    # TODO adjust this hardcode if necessary
+    # Hard-code of 0 due to alignment of antenna and craft
     rx_attitude1 = np.array([rx_roll[sec], rx_pitch[sec], 0])  # rx_yaw[sec]])
     rx1 = {
         "rx_pos_xyz": rx_pos_xyz1,
@@ -647,7 +648,6 @@ for sec in range(len(transmitter_id)):
                     sx_pos_lla1, landmask_nz, lcv_mask, water_mask
                 )
 
-                # TODO: here get large difference from matlab version
                 sx_vel_xyz1 = np.array(sx_pos_xyz_dt) - np.array(sx_pos_xyz1)
 
                 # save sx values to variables
@@ -655,12 +655,10 @@ for sec in range(len(transmitter_id)):
                 sx_pos_y[sec][ngrx_channel] = sx_pos_xyz1[1]
                 sx_pos_z[sec][ngrx_channel] = sx_pos_xyz1[2]
 
-                # TODO: sx_alt is different from the matlab version, need to debug
                 sx_lat[sec][ngrx_channel] = sx_pos_lla1[0]
                 sx_lon[sec][ngrx_channel] = sx_pos_lla1[1]
                 sx_alt[sec][ngrx_channel] = sx_pos_lla1[2]
 
-                # TODO: vel is different from the matlab version but the process is the same
                 sx_vel_x[sec][ngrx_channel] = sx_vel_xyz1[0]
                 sx_vel_y[sec][ngrx_channel] = sx_vel_xyz1[1]
                 sx_vel_z[sec][ngrx_channel] = sx_vel_xyz1[2]
@@ -794,7 +792,7 @@ L1_postCal["gps_off_boresight_angle_deg"] = gps_boresight  # checked ok
 L1_postCal["static_gps_eirp"] = static_gps_eirp  # checked ok
 L1_postCal["gps_tx_power_db_w"] = gps_tx_power_db_w  # checked ok
 L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
-
+"""
 
 ############# to save debug time, save and restore variables ##########
 #
@@ -946,7 +944,7 @@ for sec in range(len(transmitter_id)):
             ]
         )
 
-        counts_LHCP1 = raw_counts[sec, ngrx_channel, :, :]
+        counts_LHCP1 = ddm_power_counts[sec, ngrx_channel, :, :]
         # from onboard tracker
         add_range_to_sp1 = add_range_to_sp[sec][ngrx_channel]
         delay_center_chips1 = delay_center_chips[sec][ngrx_channel]
@@ -960,8 +958,9 @@ for sec in range(len(transmitter_id)):
         nf_counts_LHCP1 = ddm_power_counts[sec, ngrx_channel, :, :]
         nf_counts_RHCP1 = ddm_power_counts[sec, ngrx_channel + J_2, :, :]
 
-        noise_floor_bins_LHCP1 = nf_counts_LHCP1[:, -delay_offset:]
-        noise_floor_bins_RHCP1 = nf_counts_RHCP1[:, -delay_offset:]
+        # delay_offset+1 due to difference between Matlab and Python indexing
+        noise_floor_bins_LHCP1 = nf_counts_LHCP1[-(delay_offset + 1) :, :]
+        noise_floor_bins_RHCP1 = nf_counts_RHCP1[-(delay_offset + 1) :, :]
 
         if (not np.isnan(tx_pos_x[sec][ngrx_channel])) and (
             not np.isnan(counts_LHCP1).all()
@@ -969,7 +968,8 @@ for sec in range(len(transmitter_id)):
             # peak delay and doppler location
             # assume LHCP and RHCP DDMs have the same peak location
             peak_counts1 = np.max(counts_LHCP1)
-            [peak_doppler_col1, peak_delay_row1] = np.where(
+            # invert order compared to Matlab
+            [peak_delay_row1, peak_doppler_col1] = np.where(
                 counts_LHCP1 == peak_counts1
             )
 
@@ -1024,17 +1024,22 @@ peak_doppler_col[:, J_2:J] = peak_doppler_col[:, 0:J_2]
 sp_delay_row[:, J_2:J] = sp_delay_row[:, 0:J_2]
 sp_doppler_col[:, J_2:J] = sp_doppler_col[:, 0:J_2]
 
+sp_delay_error[:, J_2:J] = sp_delay_error[:, 0:J_2]
+sp_doppler_error[:, J_2:J] = sp_doppler_error[:, 0:J_2]
+
+zenith_code_phase[:, J_2:J] = zenith_code_phase[:, 0:J_2]
+
 # save variables
-L1_postCal["brcs_ddm_peak_bin_delay_row"] = peak_delay_row  # checked ok
-L1_postCal["brcs_ddm_peak_bin_dopp_col"] = peak_doppler_col  # checked ok
+L1_postCal["brcs_ddm_peak_bin_delay_row"] = peak_delay_row
+L1_postCal["brcs_ddm_peak_bin_dopp_col"] = peak_doppler_col
 
-L1_postCal["brcs_ddm_sp_bin_delay_row"] = sp_delay_row  # checked diff 0.001
-L1_postCal["brcs_ddm_sp_bin_dopp_col"] = sp_doppler_col  # checked diff 0.001
+L1_postCal["brcs_ddm_sp_bin_delay_row"] = sp_delay_row
+L1_postCal["brcs_ddm_sp_bin_dopp_col"] = sp_doppler_col
 
-L1_postCal["sp_delay_error"] = sp_delay_error  # checked diff 1 e-4
-L1_postCal["sp_dopp_error"] = sp_doppler_error  # checked diff 1 / e2
+L1_postCal["sp_delay_error"] = sp_delay_error
+L1_postCal["sp_dopp_error"] = sp_doppler_error
 
-L1_postCal["zenith_code_phase"] = zenith_code_phase  # checked ok
+L1_postCal["zenith_code_phase"] = zenith_code_phase
 
 
 # Part 3B: noise floor and SNR
@@ -1068,8 +1073,9 @@ for sec in range(len(transmitter_id)):
         counts_LHCP1 = ddm_power_counts[sec, ngrx_channel, :, :]
         counts_RHCP1 = ddm_power_counts[sec, ngrx_channel + J_2, :, :]
 
-        sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel]) + 1
-        sp_doppler_col1 = np.floor(sp_doppler_col[sec][ngrx_channel]) + 1
+        # Removed +1 due to Python 0-based indexing
+        sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel])  # + 1
+        sp_doppler_col1 = np.floor(sp_doppler_col[sec][ngrx_channel])  # + 1
 
         if (0 < sp_delay_row1 < 40) and (0 < sp_doppler_col1 < 5):
             sp_counts_LHCP1 = counts_LHCP1[int(sp_delay_row1), int(sp_doppler_col1)]
@@ -1110,30 +1116,37 @@ for sec in range(len(transmitter_id)):
                     & (sx_d_snell_angle1 < 2)
                 )
 
-            if snr_LHCP1 >= 2 & ~delay_doppler_snell1:
-                confidence_flag1 = 0
-            elif snr_LHCP1 < 2 & ~delay_doppler_snell1:
-                confidence_flag1 = 1
-            elif snr_LHCP1 < 2 & delay_doppler_snell1:
-                confidence_flag1 = 2
-            elif snr_LHCP1 >= 2 & delay_doppler_snell1:
-                confidence_flag1 = 3
-            else:
-                confidence_flag1 = np.nan
+                # Python snr_LHCP_db1 == Matlab snr_LHCP1 for this step,
+                # Python does this all in one loop whereas Matlab does this in multiple
+                # loops and re-uses the snr_LHCP1 variable to refer to snr_LHCP_db1 values
+                if (snr_LHCP_db1 >= 2.0) and not delay_doppler_snell1:
+                    confidence_flag1 = 0
+                elif (snr_LHCP_db1 < 2.0) and not delay_doppler_snell1:
+                    confidence_flag1 = 1
+                elif (snr_LHCP_db1 < 2.0) and delay_doppler_snell1:
+                    confidence_flag1 = 2
+                elif (snr_LHCP_db1 >= 2.0) and delay_doppler_snell1:
+                    confidence_flag1 = 3
+                else:
+                    confidence_flag1 = np.nan
 
-            confidence_flag[sec][ngrx_channel] = confidence_flag1
+                confidence_flag[sec][ngrx_channel] = confidence_flag1
 
+# TODO FIX these (stack them)
 noise_floor = [
     np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_LHCP),
     np.full([raw_counts.shape[2], raw_counts.shape[3]], noise_floor_RHCP),
 ]
 L1_postCal["noise_floor"] = noise_floor
-L1_postCal["ddm_snr"] = ddm_snr
-L1_postCal["snr_flag"] = snr_flag
+# TODO TO HERE
 
 confidence_flag[:, J_2:J] = confidence_flag[:, 0:J_2]
 
+L1_postCal["ddm_snr"] = ddm_snr
+L1_postCal["snr_flag"] = snr_flag
+
 L1_postCal["confidence_flag"] = confidence_flag
+
 
 L1_postCal["sp_ngrx_delay_correction"] = sp_delay_error
 L1_postCal["sp_ngrx_dopp_correction"] = sp_doppler_error
@@ -1143,10 +1156,10 @@ L1_postCal["sp_ngrx_dopp_correction"] = sp_doppler_error
 
 # separate copol and xpol gain for using later
 rx_gain_copol_LL = sx_rx_gain_copol[:, :10]
-rx_gain_copol_RR = sx_rx_gain_copol[:, :20]
+rx_gain_copol_RR = sx_rx_gain_copol[:, 10:20]
 
 rx_gain_xpol_RL = sx_rx_gain_xpol[:, :10]
-rx_gain_xpol_LR = sx_rx_gain_xpol[:, :20]
+rx_gain_xpol_LR = sx_rx_gain_xpol[:, 10:20]
 
 # BRCS, reflectivity
 pol_shape = [*raw_counts.shape]
@@ -1202,8 +1215,9 @@ for sec in range(len(transmitter_id)):
             )
 
             # reflectivity at SP
-            sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel]) + 1
-            sp_doppler_col1 = np.floor(sp_doppler_col[sec][ngrx_channel]) + 1
+            # ignore +1 as Python is 0-base not 1-base
+            sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel])  # + 1
+            sp_doppler_col1 = np.floor(sp_doppler_col[sec][ngrx_channel])  # + 1
 
             if (0 < sp_delay_row1 < 40) and (0 < sp_doppler_col1 < 5):
                 sp_refl_copol1 = refl_copol1[int(sp_delay_row1), int(sp_doppler_col1)]

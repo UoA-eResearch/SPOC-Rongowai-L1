@@ -123,7 +123,6 @@ def ddm_calibration(
     ddm_ant : numpy.array()
         Empty array to receive ANZ_port of each DDM
     """
-    # TODO - what to do about partial DDMs?
     # derive signal power
     # iterate over seconds of flight
     for sec in range(len(std_dev_rf1)):
