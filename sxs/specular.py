@@ -677,17 +677,24 @@ def get_amb_fun(dtau_s, dfreq_Hz, tau_c, Ti):
     return chi
 
 
-def get_chi2(num_delay_bins, num_doppler_bins):
+def get_chi2(
+    num_delay_bins,
+    num_doppler_bins,
+    delay_center_bin,
+    doppler_center_bin,
+    delay_res,
+    doppler_res,
+):
+    # this function gets 2D AF
+
     chip_rate = 1.023e6
     tau_c = 1 / chip_rate
     T_coh = 1 / 1000
 
-    delay_res = 0.25
-    doppler_res = 500
-
-    delay_center_bin = 20  # 0-based index
-    doppler_center_bin = 2  # 0-based index
-
+    # delay_res = 0.25
+    # doppler_res = 500
+    # delay_center_bin = 20  # 0-based index
+    # doppler_center_bin = 2  # 0-based index
     # chi = np.zeros([num_delay_bins, num_doppler_bins])
 
     def ix_func(i, j):
@@ -879,8 +886,59 @@ def get_specular_bin(tx, rx, sx, ddm):
     return specular_bin, zenith_code_phase, confidence_flag
 
 
-def get_ddm_Aeff4():
-    return True
+def get_ddm_Aeff4(
+    rx_alt,
+    inc_angle,
+    az_angle,
+    sp_delay_bin,
+    sp_doppler_bin,
+    chi2,
+    A_phy_LUT_interp,
+):
+    # this is to construct effective scattering area from LUTs
+
+    # center delay and doppler bin for full DDM
+    # not to be used elsewhere
+    center_delay_bin = 40
+    center_doppler_bin = 5
+
+    # derive full scattering area from LUT
+    A_phy_full_1 = A_phy_LUT_interp((rx_alt, inc_angle, az_angle))
+    A_phy_full_2 = np.vstack((np.zeros((1, 41)), A_phy_full_1, np.zeros((1, 41))))
+    A_phy_full = np.hstack((A_phy_full_2, np.zeros((9, 39))))
+
+    # shift A_phy_full according to the floating SP bin
+
+    # integer and fractional part of the SP bin
+    sp_delay_intg = np.floor(sp_delay_bin)
+    sp_delay_frac = sp_delay_bin - sp_delay_intg
+
+    sp_doppler_intg = np.floor(sp_doppler_bin)
+    sp_doppler_frac = sp_doppler_bin - sp_doppler_intg
+
+    # shift 1: shift along delay direction
+    A_phy_shift = np.roll(A_phy_full, 1)
+    A_phy_shift = (1 - sp_delay_frac) * A_phy_full + (sp_delay_frac * A_phy_shift)
+
+    # shift 2: shift along doppler direction
+    A_phy_shift2 = np.roll(A_phy_shift, 1, axis=0)
+    A_phy_shift = (1 - sp_doppler_frac) * A_phy_shift + (sp_doppler_frac * A_phy_shift2)
+
+    # crop the A_phy_full to Rongowai 5*40 DDM size
+    delay_shift_bin = center_delay_bin - sp_delay_intg
+    doppler_shift_bin = center_doppler_bin - sp_doppler_intg
+
+    # Change from Matlab offsets to account for Matlab/Python indexing differences
+    A_phy = A_phy_shift[
+        int(doppler_shift_bin - 1) : int(doppler_shift_bin + 4),
+        int(delay_shift_bin - 1) : int(delay_shift_bin + 39),
+    ]
+
+    # convolution to A_eff
+    A_eff1 = convolve2d(A_phy, chi2.T)
+    A_eff = A_eff1[2:7, 20:60]  # cut suitable size for A_eff, 0-based index
+
+    return A_eff
 
 
 def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
