@@ -29,7 +29,7 @@ for i in range(3):
 
 
 def power2db(power):
-    return 10 * math.log10(power)
+    return np.multiply(math.log10(power), 10)
 
 
 def db2power(db):

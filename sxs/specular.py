@@ -5,7 +5,7 @@ import cmath
 import numpy as np
 import pyproj
 from scipy import constants
-from scipy.interpolate import interpn, interp2d
+from scipy.interpolate import interp2d
 from scipy.signal import convolve2d
 import geopy.distance as geo_dist
 import pymap3d as pm
@@ -55,13 +55,6 @@ def nadir(m_ecef):
 
 
 @njit
-def pdis(Tx, Rx, Sx):
-    """% This function computes the distance from Tx to Sx to Rx
-    % based on their coordinates given in ECEF"""
-    return np.linalg.norm(Sx - Tx, 2) + np.linalg.norm(Rx - Sx, 2)
-
-
-@njit
 def ite(tx_pos_xyz, rx_pos_xyz):
     """% This function iteratively solve the positions of specular points
     % based on the WGS84 model
@@ -95,9 +88,6 @@ def ite(tx_pos_xyz, rx_pos_xyz):
         f_mu = np.linalg.norm(s_mu - tx_pos_xyz, 2) + np.linalg.norm(
             rx_pos_xyz - s_mu, 2
         )
-
-        # f_lambda = pdis(tx_pos_xyz, rx_pos_xyz, s_lambda)
-        # f_mu = pdis(tx_pos_xyz, rx_pos_xyz, s_mu)
 
         if f_lambda > f_mu:
             a = m_lambda
@@ -417,12 +407,6 @@ def ecef2orf(P, V, S_ecef):
     return theta_orf, phi_orf
 
 
-@njit
-def deg2rad(degrees):
-    radians = degrees * math.pi / 180
-    return radians
-
-
 def ecef2brf(P, V, S_ecef, SC_att):
     """
     this function computes the elevation (theta) and azimuth (phi) angle of a
@@ -609,39 +593,6 @@ def sp_related(tx, rx, sx_pos_xyz, SV_eirp_LUT):
     return sp_angle_body, sp_angle_enu, sp_angle_ant, theta_gps, range, gps_rad
 
 
-def get_sx_rx_gain(sp_angle_ant, nadir_pattern):
-    """
-    define azimuth and elevation angle in the antenna frame
-
-    Parameters
-    ----------
-    sp_angle_ant
-    nadir_pattern
-
-    Returns
-    -------
-    """
-    res = 0.1  # resolution in degrees
-    az_deg = np.arange(0, 360, res)
-    el_deg = np.arange(120, 0, -1 * res)
-
-    lhcp_gain_pattern = nadir_pattern["LHCP"]
-    rhcp_gain_pattern = nadir_pattern["RHCP"]
-
-    sp_theta_ant = sp_angle_ant[0]
-    sp_az_ant = sp_angle_ant[1]
-
-    az_index = np.argmin(np.abs(sp_az_ant - az_deg))
-    el_index = np.argmin(np.abs(sp_theta_ant - el_deg))
-
-    lhcp_gain_dbi = lhcp_gain_pattern[el_index, az_index]
-    rhcp_gain_dbi = rhcp_gain_pattern[el_index, az_index]
-
-    sx_rx_gain = [lhcp_gain_dbi, rhcp_gain_dbi]
-
-    return sx_rx_gain
-
-
 def get_amb_fun(dtau_s, dfreq_Hz, tau_c, Ti):
     """
     this function computes the ambiguity function
@@ -786,106 +737,6 @@ def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
     return delay_chips, doppler_hz, add_delay_chips
 
 
-def get_specular_bin(tx, rx, sx, ddm):
-    """
-    this function derives the
-    1) precise SP bin location in the DDM - 0-indexed
-    2) confidence flag for the computed SP and also
-    3) zenith code phase directly tracked by the NGRx
-    """
-    c = 299792458
-
-    tx_pos_xyz = tx["tx_pos_xyz"]
-    tx_vel_xyz = tx["tx_vel_xyz"]
-
-    rx_pos_xyz = rx["rx_pos_xyz"]
-    rx_vel_xyz = rx["rx_vel_xyz"]
-    rx_clk_drift = rx["rx_clk_drift"]
-
-    sx_pos_xyz = sx["sx_pos_xyz"]
-    sx_d_snell = sx["sx_d_snell"]
-    dist_to_coast = sx["dist_to_coast"]
-
-    raw_counts = ddm["raw_counts"]
-    delay_resolution = ddm["delay_resolution"]
-    delay_center_chips = ddm["delay_center_chips"]
-    delay_center_bin = ddm["delay_center_bin"]
-
-    doppler_resolution = ddm["doppler_resolution"]
-    doppler_center_hz = ddm["doppler_center_hz"]
-    doppler_center_bin = ddm["doppler_center_bin"]
-
-    add_range_to_sp = ddm["add_range_to_sp"]
-    snr_db = ddm["snr_db"]
-
-    # derive zenith code phase
-    add_range_to_sp_chips = meter2chips(add_range_to_sp)
-    zenith_code_phase1 = delay_center_chips + add_range_to_sp_chips
-    zenith_code_phase = delay_correction(zenith_code_phase1, 1023)
-
-    # derive precise SP bin location
-    _, pixel_doppler_hz, pixel_add_range_to_sp_chips = deldop(
-        tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, sx_pos_xyz
-    )
-
-    delay_error = add_range_to_sp_chips - pixel_add_range_to_sp_chips
-    sp_delay_row = (
-        delay_center_bin + delay_error / delay_resolution
-    )  # cygnss is using "-"
-
-    doppler_clk = rx_clk_drift / c
-    pixel_doppler_hz = pixel_doppler_hz + doppler_clk
-
-    doppler_error = (
-        doppler_center_hz - pixel_doppler_hz
-    )  # slightly different from the matlab version < 0.1 / e2
-    sp_dopp_col = doppler_center_bin - doppler_error / doppler_resolution
-
-    sp_delay_error = delay_error
-    sp_dopp_error = doppler_error
-
-    # derive confidence flag
-    if dist_to_coast < 0:
-        confidence_flag = 3  # confident on the ocean surface
-    else:
-        delay_max_bin, doppler_max_bin = np.unravel_index(
-            raw_counts.argmax(), raw_counts.shape
-        )
-
-        # delay_max = delay_center_chips + (delay_max_bin - delay_center_bin - 1) * delay_resolution  # diff < 1 / e-2
-        delay_max = (
-            delay_center_chips + (delay_max_bin - delay_center_bin) * delay_resolution
-        )  # diff < 1 / e-2
-        delay_sp = zenith_code_phase1 - pixel_add_range_to_sp_chips
-        delay_diff = abs(delay_sp - delay_max)
-
-        # doppler_max = doppler_center_hz + (doppler_max_bin - doppler_center_bin - 1) * doppler_resolution
-        doppler_max = (
-            doppler_center_hz
-            + (doppler_max_bin - doppler_center_bin) * doppler_resolution
-        )
-        doppler_diff = abs(pixel_doppler_hz - doppler_max)
-
-        delay_doppler_snell = (
-            (delay_diff < 2.5) and (doppler_diff < 200) and (sx_d_snell < 2)
-        )
-
-        if snr_db >= 2 and not delay_doppler_snell:
-            confidence_flag = 0
-        elif snr_db < 2 and not delay_doppler_snell:
-            confidence_flag = 1
-        elif snr_db < 2 and delay_doppler_snell:
-            confidence_flag = 2
-        elif snr_db >= 2 and delay_doppler_snell:
-            confidence_flag = 3
-        else:
-            confidence_flag = np.nan
-
-    specular_bin = [sp_delay_row, sp_dopp_col, sp_delay_error, sp_dopp_error]
-
-    return specular_bin, zenith_code_phase, confidence_flag
-
-
 def get_ddm_Aeff4(
     rx_alt,
     inc_angle,
@@ -941,140 +792,6 @@ def get_ddm_Aeff4(
     return A_eff
 
 
-def get_ddm_Aeff(tx, rx, sx, local_dem, phy_ele_size, chi2):
-    """
-    this function computes the effective scattering area at the given surface
-    Inputs:
-    1) tx, rx: tx and rx structures
-    2) sx_pos_xyz: ecef position of specular points
-    3) ddm: ddm structure
-    4) local_dem: local region centred at sx
-    5) T_coh: coherent integration duration
-    Output:
-    1) A_eff: effective scattering area
-    2) sp_delay_bin,sp_doppler_bin: floating specular bin
-    """
-    delay_res = 0.25
-    doppler_res = 500
-
-    # sparse structures
-    tx_pos_xyz = tx["tx_pos_xyz"]
-    tx_vel_xyz = tx["tx_vel_xyz"]
-
-    rx_pos_xyz = rx["rx_pos_xyz"]
-    rx_vel_xyz = rx["rx_vel_xyz"]
-
-    sx_pos_xyz = sx["sx_pos_xyz"]
-    # ecef2ella
-    lon, lat, alt = ecef2lla.transform(*sx_pos_xyz, radians=False)
-    sx_pos_lla = [lat, lon, alt]
-
-    sx_delay_bin = sx["sx_delay_bin"] + 1  # need to fix all 0-indexed bin to 1-indexed
-    sx_doppler_bin = sx["sx_doppler_bin"] + 1
-
-    # sparse local_dem structure
-    local_lat = local_dem["lat"]
-    local_lon = local_dem["lon"]
-    local_ele = local_dem["ele"]
-
-    num_grids = len(local_lat)
-
-    # get coarsen local_dem
-    sample_rate = 30
-
-    lat_coarse = local_lat[::sample_rate]
-    lon_coarse = local_lon[::sample_rate]
-    ele_coarse = local_ele[::sample_rate, ::sample_rate]
-
-    num_grids_coarse = len(lat_coarse)
-
-    # get delay-doppler map over the surface
-    delay_coarse = np.zeros((num_grids_coarse, num_grids_coarse))
-    doppler_coarse = np.zeros((num_grids_coarse, num_grids_coarse))
-
-    delay_chips_sx, doppler_Hz_sx, _ = deldop(
-        tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, sx_pos_xyz
-    )  #
-
-    for m in range(num_grids_coarse):  # 0.4s
-        for n in range(num_grids_coarse):
-            # ecef2ella
-            p_pos_lla1 = [lon_coarse[n], lat_coarse[m], ele_coarse[m, n]]
-            p_pos_xyz1 = lla2ecef.transform(*p_pos_lla1, radians=False)
-
-            delay_p1, doppler_p1, _ = deldop(
-                tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_pos_xyz1
-            )
-
-            delay_coarse[m, n] = delay_p1 - delay_chips_sx
-            doppler_coarse[m, n] = doppler_p1 - doppler_Hz_sx  # diff < 1 / e3
-
-    interp_delay_chips = interp2d(lon_coarse, lat_coarse, delay_coarse, kind="cubic")
-    delay_chips = interp_delay_chips(local_lon, local_lat)
-    delay_chips = np.flipud(delay_chips)
-    interp_doppler_Hz = interp2d(lon_coarse, lat_coarse, doppler_coarse, kind="cubic")
-    doppler_Hz = interp_doppler_Hz(local_lon, local_lat)
-    doppler_Hz = np.flipud(doppler_Hz)
-    # 0.01s
-
-    # get physical size
-    sx_pos_lat = sx_pos_lla[0]
-    idx_lat = np.argmin(np.abs(phy_ele_size[:, 0] - sx_pos_lat))
-    dA = phy_ele_size[
-        int(idx_lat - np.floor(num_grids / 2)) : int(
-            idx_lat + np.floor(num_grids / 2) + 1
-        ),
-        1,
-    ]  # 0-based index
-
-    dA = np.tile(dA, (num_grids, 1))
-
-    # construct physical size DDM
-    A_phy = np.zeros((5, 40))
-
-    # t0 = timer()
-    # bin to physical size DDM
-    for m in range(num_grids):  # 0.9s -> 0.6s by using continue
-        for n in range(num_grids):
-            delay_bin_idx1 = int(
-                np.floor(-1 * delay_chips[n, m] / delay_res + sx_delay_bin) - 1
-            )  # 0-based index
-            if delay_bin_idx1 < 0 or delay_bin_idx1 > 39:
-                continue
-            doppler_bin_idx1 = int(
-                np.floor(doppler_Hz[n, m] / doppler_res + sx_doppler_bin) - 1
-            )  # 0-based index
-            if doppler_bin_idx1 < 0 or doppler_bin_idx1 > 4:
-                continue
-
-            # 0-based index
-            # if (delay_bin_idx1 >= 0) and (delay_bin_idx1 <= 39) and (doppler_bin_idx1 >= 0) and (doppler_bin_idx1 <= 4):
-            temp = A_phy[doppler_bin_idx1, delay_bin_idx1]
-            temp = temp + dA[n, m]
-            A_phy[doppler_bin_idx1, delay_bin_idx1] = temp
-
-    # print('t0 --- ', timer() - t0)
-
-    # it = np.nditer(delay_chips, flags=['multi_index'])  #1.2s
-    # for _ in it:
-    #     i, j = it.multi_index
-    #     delay_bin_idx1 = int(np.floor(-1 * delay_chips[j, i] / delay_res + sx_delay_bin) - 1)  # 0-based index
-    #     doppler_bin_idx1 = int(np.floor(doppler_Hz[j, i] / doppler_res + sx_doppler_bin) - 1)  # 0-based index
-
-    #     # 0-based index
-    #     if (delay_bin_idx1 >= 0) and (delay_bin_idx1 <= 39) and (doppler_bin_idx1 >= 0) and (doppler_bin_idx1 <= 4):
-    #         temp = A_phy[doppler_bin_idx1, delay_bin_idx1]
-    #         temp = temp + dA[j, i]
-    #         A_phy[doppler_bin_idx1, delay_bin_idx1] = temp
-
-    # convolution to A_eff
-    A_eff1 = convolve2d(A_phy, chi2.T)
-    A_eff = A_eff1[2:7, 19:59]  # cut suitable size for A_eff, 0-based index
-    A_eff_all = A_eff1
-
-    return A_eff, A_eff_all
-
-
 def ddm_brcs2(power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, TSx, RSx):
     """
     This version has copol xpol antenna gain implemented
@@ -1105,103 +822,6 @@ def ddm_brcs2(power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, TSx
     brcs_xpol = (term4[1, 0] * power_analog_LHCP) + (term4[1, 1] * power_analog_RHCP)
 
     return brcs_copol, brcs_xpol
-
-
-def ddm_brcs(power_analog, eirp_watt, rx_gain_db_i, TSx, RSx):
-    """
-    this function computes bistatic radar cross section (BRCS) according to
-    bistatic radar equation based on the inputs as below
-    inputs:
-    1) power_analog: L1a product in watts
-    2) eirp_watt, rx_gain_db_i: gps eirp in watts and rx antenna gain in dBi
-    3) TSx, RSx: Tx to Sx and Rx to Sx ranges
-    outputs:
-    1) brcs: bistatic RCS
-    """
-    # define constants
-    c = 299792458  # light speed, m/s
-    f = 1575.42e6  # GPS L1 band, Hz
-    _lambda = c / f  # wavelength, m
-    _lambda2 = _lambda * _lambda
-
-    rx_gain = db2power(rx_gain_db_i)  # linear rx gain
-
-    term1 = eirp_watt * rx_gain
-
-    term2_1 = TSx * RSx
-    term2 = 1 / (term2_1 * term2_1)
-
-    power_factor = _lambda2 * term1 * term2 / pow(4 * math.pi, 3)
-
-    brcs = power_analog / power_factor
-
-    return brcs
-
-
-def get_ddm_nbrcs2(brcs, A_eff, sx_bin, flag):
-    """
-    this function computes two versions of NBRCS
-    floating SP bin location is not considered
-    TES and LES are not included in this version
-    """
-    sx_delay_bin = (
-        math.floor(sx_bin[0]) if not np.isnan(sx_bin[0]) else 0
-    )  # 0-based index
-    sx_doppler_bin = (
-        math.floor(sx_bin[1]) if not np.isnan(sx_bin[1]) else 0
-    )  # 0-based index
-
-    # case 1: small scattering area
-    # case 2: large scattering area
-
-    nbrcs = np.nan
-    nbrcs_scatter = np.nan
-
-    if flag == 1:
-        if 1 < sx_delay_bin <= 39 and 0 < sx_doppler_bin < 4:
-            sx_doppler_bin_range = list(range(sx_doppler_bin - 1, sx_doppler_bin + 2))
-            sx_delay_bin_range = list(range(sx_delay_bin - 2, sx_delay_bin + 1))
-
-            brcs_ddma = brcs[sx_delay_bin_range, :][:, sx_doppler_bin_range]
-            A_eff_ddma = A_eff[sx_delay_bin_range, :][:, sx_doppler_bin_range]
-
-            brcs_total = np.sum(brcs_ddma)
-            A_eff_total = np.sum(A_eff_ddma)
-
-            nbrcs = brcs_total / A_eff_total
-            nbrcs_scatter = A_eff_total
-        else:
-            nbrcs = np.nan
-            nbrcs_scatter = np.nan
-
-    if flag == 2:
-        if 29 < sx_delay_bin <= 39 and 0 < sx_doppler_bin < 4:
-            sx_doppler_bin_range = list(range(sx_doppler_bin - 1, sx_doppler_bin + 2))
-            sx_delay_bin_range = list(range(sx_delay_bin - 29, sx_delay_bin + 1))
-
-            brcs_ddma = brcs[sx_delay_bin_range, :][:, sx_doppler_bin_range]
-            A_eff_ddma = A_eff[sx_delay_bin_range, :][:, sx_doppler_bin_range]
-
-            brcs_total = np.sum(brcs_ddma)
-            A_eff_total = np.sum(A_eff_ddma)
-
-            nbrcs = brcs_total / A_eff_total
-            nbrcs_scatter = A_eff_total
-
-        elif 0 < sx_delay_bin <= 29 and 0 < sx_doppler_bin < 4:
-            sx_doppler_bin_range = list(range(sx_doppler_bin - 1, sx_doppler_bin + 2))
-            sx_delay_bin_range = list(range(0, sx_delay_bin + 1))
-
-            brcs_ddma = brcs[sx_delay_bin_range, :][:, sx_doppler_bin_range]
-            A_eff_ddma = A_eff[sx_delay_bin_range, :][:, sx_doppler_bin_range]
-
-            brcs_total = np.sum(brcs_ddma)
-            A_eff_total = np.sum(A_eff_ddma)
-
-            nbrcs = brcs_total / A_eff_total
-            nbrcs_scatter = A_eff_total
-
-    return nbrcs, nbrcs_scatter
 
 
 def ddm_refl2(
@@ -1235,38 +855,6 @@ def ddm_refl2(
     refl_copol = term4[0, 0] * power_analog_LHCP + term4[0, 1] * power_analog_RHCP
     refl_xpol = term4[1, 0] * power_analog_LHCP + term4[1, 1] * power_analog_RHCP
     return refl_copol, refl_xpol
-
-
-def ddm_refl(power_analog, eirp_watt, rx_gain_db_i, R_tsx, R_rsx):
-    """
-    this function computes the land reflectivity
-    inputs
-    1)power_analog: L1a product, DDM power in watt
-    2)eirp_watt: transmitter eirp in watt
-    3)rx_gain_db_i: receiver antenna gain in the direction of SP, in dBi
-    4)R_tsx, R_rsx: tx to sp range and rx to sp range, in meters
-    outputs
-    1)reflectivity
-    2)reflectivity peak
-    """
-    # define constants
-    c = 299792458  # speed of light, meter per second
-    freq = 1575.42e6  # GPS L1 operating frequency, Hz
-    _lambda = c / freq  # wavelength, meter
-    _lambda2 = _lambda * _lambda
-
-    sp_rx_gain_pow = db2power(rx_gain_db_i)  # convert antenna gain to linear form
-
-    range = R_tsx + R_rsx
-
-    term1 = np.power(4 * math.pi * range, 2)
-    term2 = eirp_watt * sp_rx_gain_pow * _lambda2
-    term3 = term1 / term2
-
-    reflectivity = power_analog * term3
-    reflectivity_peak = np.amax(reflectivity)
-
-    return reflectivity, reflectivity_peak
 
 
 def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, ddm_ant):

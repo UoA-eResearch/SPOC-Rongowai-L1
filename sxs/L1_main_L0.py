@@ -20,20 +20,15 @@ from load_files import (
     interp_ddm,
     get_orbit_file,
     load_dat_file_grid,
-    get_surf_type2,
-    get_local_dem,
     write_netcdf,
     load_A_phy_LUT,
 )
 from specular import (
     sp_solver,
     sp_related,
-    get_sx_rx_gain,
     get_chi2,
-    get_specular_bin,
     get_ddm_Aeff4,
     ddm_brcs2,
-    get_ddm_nbrcs2,
     ddm_refl2,
     get_fresnel,
     coh_det,
@@ -564,7 +559,6 @@ sx_rx_gain_copol = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
 
 
-"""
 # iterate over each second of flight
 for sec in range(len(transmitter_id)):
     t0 = timer()
@@ -797,7 +791,7 @@ L1_postCal["gps_off_boresight_angle_deg"] = gps_boresight  # checked ok
 L1_postCal["static_gps_eirp"] = static_gps_eirp  # checked ok
 L1_postCal["gps_tx_power_db_w"] = gps_tx_power_db_w  # checked ok
 L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
-"""
+
 
 ############# to save debug time, save and restore variables ##########
 #
@@ -826,7 +820,7 @@ L1_postCal["gps_ant_gain_db_i"] = gps_ant_gain_db_i  # checked ok
 # # numpy_assert_almost_dict_values(L1_postCal, L1_postCal_loaded)
 # ##############
 
-L1_postCal = np.load("debug_4a.npy", allow_pickle=True).item()
+"""L1_postCal = np.load("debug_4a.npy", allow_pickle=True).item()
 
 sx_pos_x = L1_postCal["sp_pos_x"]
 sx_pos_y = L1_postCal["sp_pos_y"]
@@ -864,7 +858,7 @@ gps_tx_power_db_w = L1_postCal["gps_tx_power_db_w"]
 gps_ant_gain_db_i = L1_postCal["gps_ant_gain_db_i"]
 
 sx_rx_gain_copol = L1_postCal["sp_rx_gain_copol"]
-sx_rx_gain_xpol = L1_postCal["sp_rx_gain_xpol"]
+sx_rx_gain_xpol = L1_postCal["sp_rx_gain_xpol"]"""
 # ##############
 
 # -------------------- Part 4B: BRCS/NBRCS, reflectivity, coherent status and fresnel zone
@@ -883,17 +877,6 @@ zenith_code_phase = np.full([*transmitter_id.shape], np.nan)
 noise_floor_all_LHCP = np.full([transmitter_id.shape[0], J_2], np.nan)
 noise_floor_all_RHCP = np.full([transmitter_id.shape[0], J_2], np.nan)
 
-# brcs = np.full([*transmitter_id.shape, 40, 5], np.nan)
-# A_eff_all = np.full([*transmitter_id.shape, 79, 9], np.nan)  # debug only
-
-# nbrcs_scatter_area_v1 = np.full([*transmitter_id.shape], np.nan)
-# ddm_nbrcs_v1 = np.full([*transmitter_id.shape], np.nan)
-
-# ddm_nbrcs_v2 = np.full([*transmitter_id.shape], np.nan)
-
-# surface_reflectivity = np.full([*transmitter_id.shape, 40, 5], np.nan)
-# surface_reflectivity_peak = np.full([*transmitter_id.shape], np.nan)
-
 delay_offset = 4
 
 t0 = timer()
@@ -902,12 +885,6 @@ for sec in range(len(transmitter_id)):
     # retrieve rx positions and velocities
     rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
     rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
-    # rx_clk_drift1 = rx_clk_drift_mps[sec]
-    # rx1 = {
-    #    "rx_pos_xyz": rx_pos_xyz1,
-    #    "rx_vel_xyz": rx_vel_xyz1,
-    #    "rx_clk_drift": rx_clk_drift1,
-    # }
 
     for ngrx_channel in range(J_2):
         # retrieve tx positions and velocities
@@ -1173,8 +1150,8 @@ cable_loss_db_RHCP = 0.5840
 powloss_LHCP = db2power(cable_loss_db_LHCP)
 powloss_RHCP = db2power(cable_loss_db_RHCP)
 
+t0 = timer()
 for sec in range(len(transmitter_id)):
-    t0 = timer()
     for ngrx_channel in range(J_2):
         # compensate cable loss
         power_analog_LHCP1 = power_analog[sec, ngrx_channel, :, :] * powloss_LHCP
@@ -1241,7 +1218,7 @@ for sec in range(len(transmitter_id)):
 
             norm_refl_waveform[sec][ngrx_channel] = norm_refl_waveform_copol1
             norm_refl_waveform[sec][ngrx_channel + J_2] = norm_refl_waveform_xpol1
-
+print(f"******** finish processing part 5 data with {timer() - t0}********")
 
 L1_postCal["brcs"] = brcs
 
@@ -1260,7 +1237,7 @@ pol_shape = [*raw_counts.shape]
 # pol_shape[1] = J_2
 # nbrcs_copol = np.full([*pol_shape], np.nan)
 # nbrcs_xpol = np.full([*pol_shape], np.nan)
-nbrcs = np.full([*pol_shape], np.nan)
+nbrcs = np.full([*transmitter_id.shape], np.nan)
 
 coherency_ratio = np.full([*transmitter_id.shape], np.nan)
 coherency_state = np.full([*transmitter_id.shape], np.nan)
@@ -1270,11 +1247,9 @@ chi2 = get_chi2(
     40, 5, center_delay_bin, center_doppler_bin, delay_bin_res, doppler_bin_res
 )  # 0-based
 
-
+t0 = timer()
 # iterate over each second of flight
 for sec in range(len(transmitter_id)):
-    t0 = timer()
-    tn = 0
     # retrieve velocities and altitdues
     # bundle up craft vel data into per sec
     rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
@@ -1405,6 +1380,7 @@ for sec in range(len(transmitter_id)):
 
             coherency_ratio[sec][ngrx_channel] = CR1
             coherency_state[sec][ngrx_channel] = CS1
+print(f"******** finish processing part 6 data with {timer() - t0}********")
 
 A_eff[:, J_2:J] = A_eff[:, 0:J_2]
 nbrcs_scatter_area[:, J_2:J] = nbrcs_scatter_area[:, 0:J_2]
@@ -1419,12 +1395,249 @@ L1_postCal["ddm_nbrcs"] = nbrcs
 L1_postCal["coherency_ratio"] = coherency_ratio
 L1_postCal["coherency_state"] = coherency_state
 
-# Part 7: fresnel dimensions
+# Part 7: fresnel dimensions and cross Pol
 
 fresnel_coeff = np.full([*transmitter_id.shape], np.nan)
 fresnel_minor = np.full([*transmitter_id.shape], np.nan)
 fresnel_major = np.full([*transmitter_id.shape], np.nan)
 fresnel_orientation = np.full([*transmitter_id.shape], np.nan)
+
+nbrcs_cross_pol = np.full([*transmitter_id.shape], np.nan)
+
+t0 = timer()
+# TODO can probably condense this loop into thre above loop
+for sec in range(len(transmitter_id)):
+    for ngrx_channel in range(J):
+        tx_pos_xyz1 = [
+            tx_pos_x[sec][ngrx_channel],
+            tx_pos_y[sec][ngrx_channel],
+            tx_pos_z[sec][ngrx_channel],
+        ]
+        rx_pos_xyz1 = [rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]]
+        sx_pos_xyz1 = [
+            sx_pos_x[sec][ngrx_channel],
+            sx_pos_y[sec][ngrx_channel],
+            sx_pos_z[sec][ngrx_channel],
+        ]
+
+        inc_angle1 = sx_inc_angle[sec][ngrx_channel]
+        dist_to_coast1 = dist_to_coast_km[sec][ngrx_channel]
+        ddm_ant1 = ddm_ant[sec][ngrx_channel]
+
+        if not np.isnan(ddm_ant1):
+            fresnel_coeff1, fresnel_axis1, fresnel_orientation1 = get_fresnel(
+                tx_pos_xyz1,
+                rx_pos_xyz1,
+                sx_pos_xyz1,
+                dist_to_coast1,
+                inc_angle1,
+                ddm_ant1,
+            )
+
+            fresnel_coeff[sec][ngrx_channel] = fresnel_coeff1
+            fresnel_major[sec][ngrx_channel] = fresnel_axis1[0]
+            fresnel_minor[sec][ngrx_channel] = fresnel_axis1[1]
+            fresnel_orientation[sec][ngrx_channel] = fresnel_orientation1
+
+        # Do this once here rather than another loop over Sec and J_2
+        if ngrx_channel < J_2:
+            nbrcs_LHCP1 = nbrcs[sec][ngrx_channel]
+            nbrcs_RHCP1 = nbrcs[sec][ngrx_channel + J_2]
+            CP1 = nbrcs_LHCP1 / nbrcs_RHCP1
+            if CP1 > 0:
+                CP_db1 = power2db(CP1)
+                nbrcs_cross_pol[sec][ngrx_channel] = CP_db1
+
+print(f"******** finish processing part 7 data with {timer() - t0}********")
+
+nbrcs_cross_pol[:, J_2:J] = nbrcs_cross_pol[:, 0:J_2]
+
+L1_postCal["fresnel_coeff"] = fresnel_coeff
+L1_postCal["fresnel_major"] = fresnel_major
+L1_postCal["fresnel_minor"] = fresnel_minor
+L1_postCal["fresnel_orientation"] = fresnel_orientation
+
+# LNA noise figure is 3 dB according to the specification
+L1_postCal["nbrcs_cross_pol"] = nbrcs_cross_pol
+L1_postCal["lna_noise_figure"] = np.full([*transmitter_id.shape], 3)
+
+
+# Quality Flags
+
+quality_flags1 = np.full([*transmitter_id.shape], np.nan)
+
+for sec in range(len(transmitter_id)):
+    for ngrx_channel in range(J):
+        quality_flag1_1 = np.full([26, 1], 0)
+
+        # flag 1, 2 and 22  0-based indexing
+        rx_roll1 = rx_roll[sec]
+        rx_pitch1 = rx_pitch[sec]
+        rx_yaw1 = rx_yaw[sec]
+
+        # TODO is this an index issue???
+        if (rx_roll1 >= 29) or (rx_pitch1 >= 9) or (rx_yaw1 >= 4):  # 0-based indexing
+            quality_flag1_1[2] = 1
+        else:
+            quality_flag1_1[1] = 1
+
+        if rx_roll1 > 1:
+            quality_flag1_1[22] = 1
+
+        # flag 3   0-based indexing
+        quality_flag1_1[3] = 0
+
+        # flag 4 and 5
+        trans_id1 = transmitter_id[sec][ngrx_channel]
+        if trans_id1 == 0:
+            quality_flag1_1[4] = 1
+
+        if trans_id1 == 28:
+            quality_flag1_1[5] = 1
+
+        # flag 6 and 9
+        snr_db1 = ddm_snr[sec][ngrx_channel]
+
+        if sec > 0:  # 0-based indexing
+            snr_db2 = ddm_snr[sec - 1][ngrx_channel]
+            diff1 = (db2power(snr_db1) - db2power(snr_db2)) / db2power(snr_db1)
+            diff2 = snr_db1 - snr_db2
+
+            if abs(diff1) > 0.1:
+                quality_flag1_1[6] = 1
+
+            if abs(diff2) > 0.24:
+                quality_flag1_1[9] = 1
+
+        # flag 7 and 8
+        dist_to_coast1 = dist_to_coast_km[sec][ngrx_channel]
+
+        if dist_to_coast1 > 0:
+            quality_flag1_1[7] = 1
+
+        if dist_to_coast1 > -25:
+            quality_flag1_1[8] = 1
+
+        # flag 10
+        ant_temp1 = ant_temp_nadir[sec]
+        if sec > 0:
+            ant_temp2 = ant_temp_nadir[sec - 1]
+            rate = (ant_temp2 - ant_temp1) * 60
+
+            if rate > 1:
+                quality_flag1_1[10] = 1
+
+        # flag 11
+        zenith_code_phase1 = zenith_code_phase[sec][ngrx_channel]
+        signal_code_phase1 = delay_correction(
+            meter2chips(add_range_to_sp[sec][ngrx_channel]), 1023
+        )
+        diff1 = zenith_code_phase1 - signal_code_phase1
+        if diff1 >= 10:
+            quality_flag1_1[11] = 1
+
+        # flag 14 and 15
+        sp_delay_row1 = sp_delay_row[sec][ngrx_channel]
+        sp_dopp_col = sp_doppler_col[sec][ngrx_channel]
+
+        if not np.isnan(sp_delay_row1):
+            if (sp_delay_row1 < 15) or (sp_delay_row1 > 35):
+                quality_flag1_1[14] = 1
+
+        if not np.isnan(sp_dopp_col):
+            if (sp_dopp_col < 2) or (sp_dopp_col > 4):
+                quality_flag1_1[15] = 1
+
+        # flag 16
+        if not np.isnan(sp_delay_row1) and not np.isnan(sp_dopp_col):
+            if (
+                (math.floor(sp_delay_row1) < 38)
+                and (math.floor(sp_delay_row1) > 0)
+                and (math.floor(sp_dopp_col) < 5)
+                and (math.floor(sp_dopp_col) > 1)
+            ):
+                sp_dopp_col_range = list(
+                    range(math.floor(sp_dopp_col) - 1, math.floor(sp_dopp_col) + 2)
+                )
+                sp_delay_raw_range = list(
+                    range(math.floor(sp_delay_row1), math.floor(sp_dopp_col) + 4)
+                )  # TODO: sp_dopp_col, again?
+                brcs_ddma = brcs[sp_delay_raw_range, :][:, sp_dopp_col_range]
+                det = brcs_ddma[brcs_ddma < 0]
+                if len(det) > 0:
+                    quality_flag1_1[16] = 1
+
+        # flag 17
+        tx_pos_x1 = tx_pos_x[sec][ngrx_channel]
+        prn_code1 = prn_code[sec][ngrx_channel]
+        if (tx_pos_x1 == 0) and (not np.isnan(prn_code1)):
+            quality_flag1_1[17] = 1
+
+        # flag 18
+        sx_pos_x1 = sx_pos_x[sec][ngrx_channel]
+        if np.isnan(sx_pos_x1) and (not np.isnan(prn_code1)):
+            quality_flag1_1[18] = 1
+
+        # flag 19
+        rx_gain1 = sx_rx_gain_copol[sec][ngrx_channel]
+        if np.isnan(rx_gain1) and (not np.isnan(prn_code1)):
+            quality_flag1_1[19] = 1
+
+        quality_flag1_1[20] = 1
+
+        # flag 21 and 25
+        rx_alt = rx_pos_lla[2][sec]
+        if rx_alt > 15000:
+            quality_flag1_1[21] = 1
+        if rx_alt < 700:
+            quality_flag1_1[25] = 1
+
+        # flag 23
+        prn1 = prn_code[sec][ngrx_channel]
+        if prn1 == 28:
+            quality_flag1_1[23] = 1
+
+        # flag 24
+        # rx_vel_xyz1 = rx_vel_xyz[sec][ngrx_channel]
+        rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
+        rx_speed1 = np.linalg.norm(rx_vel_xyz1, 2)
+        if rx_speed1 > 150:
+            quality_flag1_1[24] = 1
+
+        # TODO flag 12 and flag 13 missing from matlab?
+
+        # flag 1
+        if (
+            quality_flag1_1[2] == 1
+            or quality_flag1_1[3] == 1
+            or quality_flag1_1[4] == 1
+            or quality_flag1_1[5] == 1
+            or quality_flag1_1[6] == 1
+            or quality_flag1_1[9] == 1
+            or quality_flag1_1[10] == 1
+            or quality_flag1_1[11] == 1
+            or quality_flag1_1[12] == 1
+            or quality_flag1_1[13] == 1
+            or quality_flag1_1[14] == 1
+            or quality_flag1_1[15] == 1
+            or quality_flag1_1[16] == 1
+            or quality_flag1_1[17] == 1
+            or quality_flag1_1[19] == 1
+            or quality_flag1_1[21] == 1
+            or quality_flag1_1[22] == 1
+        ):
+            quality_flag1_1[0] = 1
+
+        quality_flags1[sec][ngrx_channel] = get_quality_flag(quality_flag1_1)
+
+
+L1_postCal["quality_flags1"] = quality_flags1
+
+definition_file = "./dat/L1_Dict/L1_Dict_v2.xlsx"
+output_file = "./out/mike_test.nc"
+
+# to netcdf
+write_netcdf(L1_postCal, definition_file, output_file)
 
 
 """
@@ -1445,15 +1658,13 @@ for sec in range(len(transmitter_id)):
             sx_pos_z[sec][ngrx_channel],
         ]
 
-        inc_angle1 = sx_inc_angle[sec][ngrx_channel]
-        dist_to_coast1 = dist_to_coast_km[sec][ngrx_channel]
+
 
         eirp_watt1 = static_gps_eirp[sec][ngrx_channel]
         rx_gain_db_i1 = sx_rx_gain[sec][ngrx_channel]
         TSx1 = tx_to_sp_range[sec][ngrx_channel]
         RSx1 = rx_to_sp_range[sec][ngrx_channel]
 
-        ddm_ant1 = ddm_ant[sec][ngrx_channel]
 
         # retrieve ddm-related variables
         raw_counts1 = ddm_power_counts[sec, ngrx_channel, :, :]
@@ -1502,14 +1713,7 @@ for sec in range(len(transmitter_id)):
             )
 
             # Part 4.6: Fresnel coefficient and dimensions
-            fresnel_coeff1, fresnel_axis1, fresnel_orientation1 = get_fresnel(
-                tx_pos_xyz1,
-                rx_pos_xyz1,
-                sx_pos_xyz1,
-                dist_to_coast1,
-                inc_angle1,
-                ddm_ant1,
-            )
+
 
             # Part 4.7: coherent status
             CR1, CS1 = coh_det(raw_counts1, snr_db1)
@@ -1530,11 +1734,6 @@ for sec in range(len(transmitter_id)):
             surface_reflectivity[sec][ngrx_channel] = refl1
             surface_reflectivity_peak[sec][ngrx_channel] = refl_peak1
 
-            fresnel_coeff[sec][ngrx_channel] = fresnel_coeff1
-            fresnel_major[sec][ngrx_channel] = fresnel_axis1[0]
-            fresnel_minor[sec][ngrx_channel] = fresnel_axis1[1]
-            fresnel_orientation[sec][ngrx_channel] = fresnel_orientation1
-
             coherency_ratio[sec][ngrx_channel] = CR1
             coherency_state[sec][ngrx_channel] = CS1
 
@@ -1553,11 +1752,6 @@ L1_postCal["ddm_nbrcs_v2"] = ddm_nbrcs_v2  # checked diff 0.1
 
 L1_postCal["surface_reflectivity"] = surface_reflectivity
 L1_postCal["surface_reflectivity_peak"] = surface_reflectivity_peak  # checked diff 0.01
-
-L1_postCal["fresnel_coeff"] = fresnel_coeff  # checked ok
-L1_postCal["fresnel_major"] = fresnel_major  # checked diff 0.01
-L1_postCal["fresnel_minor"] = fresnel_minor  # checked diff 0.1 / e2
-L1_postCal["fresnel_orientation"] = fresnel_orientation
 
 L1_postCal["coherency_ratio"] = coherency_ratio  # checked ok
 L1_postCal["coherency_state"] = coherency_state  # checked ok
@@ -1613,10 +1807,7 @@ nbrcs_cross_pol_v1[:, 10:19] = -1 * nbrcs_cross_pol_v1[:, 0:9]
 nbrcs_cross_pol_v2[:, 10:19] = -1 * nbrcs_cross_pol_v2[:, 0:9]
 
 L1_postCal["nbrcs_cross_pol_v1"] = nbrcs_cross_pol_v1
-L1_postCal["nbrcs_cross_pol_v2"] = nbrcs_cross_pol_v2
-L1_postCal["lna_noise_figure"] = np.full(
-    [*transmitter_id.shape], 3
-)  # LNA noise figure is 3 dB according to the specification
+
 
 # Quality Flags
 
