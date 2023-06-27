@@ -221,7 +221,11 @@ RHCP_pattern = {
 
 # scattering area LUT
 A_phy_LUT_path = "./dat/A_phy_LUT/A_phy_LUT.dat"
-A_phy_LUT_all = load_A_phy_LUT(A_phy_LUT_path)
+# rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all = load_A_phy_LUT(
+#    A_phy_LUT_path
+# )
+rx_alt_bins, A_phy_LUT_interp = load_A_phy_LUT(A_phy_LUT_path)
+
 
 ### ---------------------- Part 1: General processing
 # This part derives global constants, timestamps, and all the other
@@ -559,6 +563,7 @@ static_gps_eirp = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_copol = np.full([*transmitter_id.shape], np.nan)
 sx_rx_gain_xpol = np.full([*transmitter_id.shape], np.nan)
 
+
 """
 # iterate over each second of flight
 for sec in range(len(transmitter_id)):
@@ -879,29 +884,15 @@ noise_floor_all_LHCP = np.full([transmitter_id.shape[0], J_2], np.nan)
 noise_floor_all_RHCP = np.full([transmitter_id.shape[0], J_2], np.nan)
 
 # brcs = np.full([*transmitter_id.shape, 40, 5], np.nan)
-# A_eff = np.full([*transmitter_id.shape, 40, 5], np.nan)
 # A_eff_all = np.full([*transmitter_id.shape, 79, 9], np.nan)  # debug only
-
 
 # nbrcs_scatter_area_v1 = np.full([*transmitter_id.shape], np.nan)
 # ddm_nbrcs_v1 = np.full([*transmitter_id.shape], np.nan)
 
-# nbrcs_scatter_area_v2 = np.full([*transmitter_id.shape], np.nan)
 # ddm_nbrcs_v2 = np.full([*transmitter_id.shape], np.nan)
 
 # surface_reflectivity = np.full([*transmitter_id.shape, 40, 5], np.nan)
 # surface_reflectivity_peak = np.full([*transmitter_id.shape], np.nan)
-
-# fresnel_coeff = np.full([*transmitter_id.shape], np.nan)
-# fresnel_minor = np.full([*transmitter_id.shape], np.nan)
-# fresnel_major = np.full([*transmitter_id.shape], np.nan)
-# fresnel_orientation = np.full([*transmitter_id.shape], np.nan)
-
-# coherency_ratio = np.full([*transmitter_id.shape], np.nan)
-# coherency_state = np.full([*transmitter_id.shape], np.nan)
-
-# derive amb-function (chi2) to be used in computing A_eff
-# chi2 = get_chi2(40, 5)  # 0-based
 
 delay_offset = 4
 
@@ -1163,12 +1154,15 @@ rx_gain_xpol_LR = sx_rx_gain_xpol[:, 10:20]
 
 # BRCS, reflectivity
 pol_shape = [*raw_counts.shape]
-pol_shape[1] = J_2
-brcs_copol = np.full([*pol_shape], np.nan)
-brcs_xpol = np.full([*pol_shape], np.nan)
+# pol_shape[1] = J_2
 
-refl_copol = np.full([*pol_shape], np.nan)
-refl_xpol = np.full([*pol_shape], np.nan)
+# brcs_copol = np.full([*pol_shape], np.nan)
+# brcs_xpol = np.full([*pol_shape], np.nan)
+brcs = np.full([*pol_shape], np.nan)
+
+# refl_copol = np.full([*pol_shape], np.nan)
+# refl_xpol = np.full([*pol_shape], np.nan)
+surface_reflectivity = np.full([*pol_shape], np.nan)
 
 sp_refl = np.full([*transmitter_id.shape], np.nan)
 norm_refl_waveform = np.full([*transmitter_id.shape, 40, 1], np.nan)
@@ -1236,18 +1230,202 @@ for sec in range(len(transmitter_id)):
                 refl_waveform_xpol1, np.nanmax(refl_waveform_xpol1)
             ).reshape(40, -1)
 
-            brcs_copol[sec][ngrx_channel] = brcs_copol1
-            brcs_xpol[sec][ngrx_channel] = brcs_xpol1
+            brcs[sec][ngrx_channel] = brcs_copol1
+            brcs[sec][ngrx_channel + J_2] = brcs_xpol1
 
-            refl_copol[sec][ngrx_channel] = refl_copol1
-            refl_xpol[sec][ngrx_channel] = refl_xpol1
+            surface_reflectivity[sec][ngrx_channel] = refl_copol1
+            surface_reflectivity[sec][ngrx_channel + J_2] = refl_xpol1
 
             sp_refl[sec][ngrx_channel] = sp_refl_copol1
             sp_refl[sec][ngrx_channel + J_2] = sp_refl_xpol1
 
             norm_refl_waveform[sec][ngrx_channel] = norm_refl_waveform_copol1
             norm_refl_waveform[sec][ngrx_channel + J_2] = norm_refl_waveform_xpol1
-            print()
+
+
+L1_postCal["brcs"] = brcs
+
+L1_postCal["surface_reflectivity"] = surface_reflectivity
+L1_postCal["surface_reflectivity_peak"] = sp_refl
+L1_postCal["norm_refl_waveform"] = norm_refl_waveform
+
+# Part 5 ends
+
+# Part 6: NBRCS and other related parameters
+
+A_eff = np.full([*raw_counts.shape], np.nan)
+nbrcs_scatter_area = np.full([*transmitter_id.shape], np.nan)
+
+pol_shape = [*raw_counts.shape]
+# pol_shape[1] = J_2
+# nbrcs_copol = np.full([*pol_shape], np.nan)
+# nbrcs_xpol = np.full([*pol_shape], np.nan)
+nbrcs = np.full([*pol_shape], np.nan)
+
+coherency_ratio = np.full([*transmitter_id.shape], np.nan)
+coherency_state = np.full([*transmitter_id.shape], np.nan)
+# derive amb-function (chi2) to be used in computing A_eff
+# % Matlab corrects delay/Doppler index by adding +1, Python doesn't
+chi2 = get_chi2(
+    40, 5, center_delay_bin, center_doppler_bin, delay_bin_res, doppler_bin_res
+)  # 0-based
+
+
+# iterate over each second of flight
+for sec in range(len(transmitter_id)):
+    t0 = timer()
+    tn = 0
+    # retrieve velocities and altitdues
+    # bundle up craft vel data into per sec
+    rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
+    rx_alt1 = rx_pos_lla[2][sec]
+
+    # variables are solved only for LHCP channels
+    for ngrx_channel in range(J_2):
+        # retrieve tx velocities
+        # bundle up velocity data into per sec
+        tx_vel_xyz1 = np.array(
+            [
+                tx_vel_x[sec][ngrx_channel],
+                tx_vel_y[sec][ngrx_channel],
+                tx_vel_z[sec][ngrx_channel],
+            ]
+        )
+
+        # azimuth angle between TX and RX velocity
+        unit_rx_vel1 = rx_vel_xyz1 / np.linalg.norm(rx_vel_xyz1, 2)
+        unit_tx_vel1 = tx_vel_xyz1 / np.linalg.norm(tx_vel_xyz1, 2)
+
+        # 1st input of A_eff
+        az_angle1 = math.degrees(math.acos(np.dot(unit_rx_vel1, unit_tx_vel1)))
+
+        sx_pos_xyz1 = [
+            sx_pos_x[sec][ngrx_channel],
+            sx_pos_y[sec][ngrx_channel],
+            sx_pos_z[sec][ngrx_channel],
+        ]
+        sx_lla1 = ecef2lla.transform(*sx_pos_xyz1, radians=False)
+
+        # 2nd input of A_eff
+        rx_alt_corrected1 = rx_alt1 - sx_lla1[2]
+
+        # % 3rd input of A_eff
+        inc_angle1 = sx_inc_angle[sec][ngrx_channel]
+
+        brcs_copol1 = brcs[sec][ngrx_channel]
+        brcs_xpol1 = brcs[sec][ngrx_channel + J_2]
+        counts_LHCP1 = ddm_power_counts[sec][ngrx_channel]
+        snr_LHCP1 = ddm_snr[sec][ngrx_channel]
+
+        # evaluate delay and Doppler bin location at SP
+        # Matlab uses +1, not required in Python 0-based indexing
+        sp_delay_row1 = sp_delay_row[sec][ngrx_channel]  # +1;
+        sp_doppler_col1 = sp_doppler_col[sec][ngrx_channel]  # +1;
+
+        # ensure the SP is within DDM range (account for python vs Matlab indexing)
+        SP_cond = (0 <= sp_delay_row1 <= 38) and (0 <= sp_doppler_col1 <= 4)
+        # ensure interpolate within reasonable range
+        interp_cond = rx_alt_bins[0] <= rx_alt_corrected1 <= rx_alt_bins[-1]
+        angle_cond = 0 <= inc_angle1 <= 80
+
+        if SP_cond and interp_cond and angle_cond:
+            # note that the A_eff1 is transposed due to shape inconsistencies
+            #  (40,5) vs (5,40)
+            A_eff1 = get_ddm_Aeff4(
+                rx_alt_corrected1,
+                inc_angle1,
+                az_angle1,
+                sp_delay_row1,
+                sp_doppler_col1,
+                chi2,
+                A_phy_LUT_interp,
+            ).T
+
+            # derive NBRCS - single theoretical SP bin
+            # formerly delay_intg1 and delay_frac1, shortened for code clarity
+            del_intg1 = int(np.floor(sp_delay_row1) + 1)
+            del_frac1 = sp_delay_row1 - np.floor(sp_delay_row1)
+
+            # formerly delay_intg1 and delay_frac1, shortened for code clarity
+            dop_intg1 = int(np.floor(sp_doppler_col1) + 1)
+            dop_frac1 = sp_doppler_col1 - np.floor(sp_doppler_col1)
+
+            term1 = 1 - dop_frac1
+            term2 = 1 - del_frac1
+
+            if dop_intg1 <= 4:
+                brcs_copol_ddma1 = (
+                    (term1 * term2 * brcs_copol1[del_intg1, dop_intg1])
+                    + (term1 * del_frac1 * brcs_copol1[del_intg1 + 1, dop_intg1])
+                    + (dop_frac1 * term2 * brcs_copol1[del_intg1, dop_intg1 + 1])
+                    + (
+                        dop_frac1
+                        * del_frac1
+                        * brcs_copol1[del_intg1 + 1, dop_intg1 + 1]
+                    )
+                )
+
+                brcs_xpol_ddma1 = (
+                    (term1 * term2 * brcs_xpol1[del_intg1, dop_intg1])
+                    + (term1 * del_frac1 * brcs_xpol1[del_intg1 + 1, dop_intg1])
+                    + (dop_frac1 * term2 * brcs_xpol1[del_intg1, dop_intg1 + 1])
+                    + (dop_frac1 * del_frac1 * brcs_xpol1[del_intg1 + 1, dop_intg1 + 1])
+                )
+
+                A_eff_ddma1 = (
+                    (term1 * term2 * A_eff1[del_intg1, dop_intg1])
+                    + (term1 * del_frac1 * A_eff1[del_intg1 + 1, dop_intg1])
+                    + (dop_frac1 * term2 * A_eff1[del_intg1, dop_intg1 + 1])
+                    + (dop_frac1 * del_frac1 * A_eff1[del_intg1 + 1, dop_intg1 + 1])
+                )
+
+            else:
+                brcs_copol_ddma1 = (1 - del_frac1) * brcs_copol1[
+                    del_intg1, dop_intg1
+                ] + (del_frac1 * brcs_copol1[del_intg1 + 1, dop_intg1])
+
+                brcs_xpol_ddma1 = (1 - del_frac1) * brcs_xpol1[del_intg1, dop_intg1] + (
+                    del_frac1 * brcs_xpol1[del_intg1 + 1, dop_intg1]
+                )
+                A_eff_ddma1 = (1 - del_frac1) * A_eff1[del_intg1, dop_intg1] + (
+                    del_frac1 * A_eff1[del_intg1 + 1, dop_intg1]
+                )
+
+            nbrcs_copol1 = brcs_copol_ddma1 / A_eff_ddma1
+            nbrcs_xpol1 = brcs_xpol_ddma1 / A_eff_ddma1
+
+            # coherent reflection
+            CR1, CS1 = coh_det(counts_LHCP1, snr_LHCP1)
+
+            A_eff[sec][ngrx_channel] = A_eff1
+            nbrcs_scatter_area[sec][ngrx_channel] = A_eff_ddma1
+
+            nbrcs[sec][ngrx_channel] = nbrcs_copol1
+            nbrcs[sec][ngrx_channel + J_2] = nbrcs_xpol1
+
+            coherency_ratio[sec][ngrx_channel] = CR1
+            coherency_state[sec][ngrx_channel] = CS1
+
+A_eff[:, J_2:J] = A_eff[:, 0:J_2]
+nbrcs_scatter_area[:, J_2:J] = nbrcs_scatter_area[:, 0:J_2]
+
+coherency_ratio[:, J_2:J] = coherency_ratio[:, 0:J_2]
+coherency_state[:, J_2:J] = coherency_state[:, 0:J_2]
+
+L1_postCal["A_eff"] = A_eff
+L1_postCal["nbrcs_scatter_area"] = nbrcs_scatter_area
+L1_postCal["ddm_nbrcs"] = nbrcs
+
+L1_postCal["coherency_ratio"] = coherency_ratio
+L1_postCal["coherency_state"] = coherency_state
+
+# Part 7: fresnel dimensions
+
+fresnel_coeff = np.full([*transmitter_id.shape], np.nan)
+fresnel_minor = np.full([*transmitter_id.shape], np.nan)
+fresnel_major = np.full([*transmitter_id.shape], np.nan)
+fresnel_orientation = np.full([*transmitter_id.shape], np.nan)
+
 
 """
 # derive brcs, nbrcs, and other parameters

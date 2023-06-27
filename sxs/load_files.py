@@ -145,7 +145,10 @@ def load_A_phy_LUT(filepath):
                     ).T  # uint32
                     A_phy_LUT_all[m, n, k] = data
 
-    return rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all
+    return rx_alt_bins, RegularGridInterpolator(
+        (rx_alt_bins, inc_angle_bins, az_angle_bins), A_phy_LUT_all, bounds_error=True
+    )
+    # return rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all
 
 
 # calculate which orbit file to load
