@@ -407,6 +407,37 @@ def ecef2orf(P, V, S_ecef):
     return theta_orf, phi_orf
 
 
+def get_sx_rx_gain(sp_angle_ant, nadir_pattern):
+    """
+    define azimuth and elevation angle in the antenna frame
+    Parameters
+    ----------
+    sp_angle_ant
+    nadir_pattern
+    Returns
+    -------
+    """
+    res = 0.1  # resolution in degrees
+    az_deg = np.arange(0, 360, res)
+    el_deg = np.arange(120, 0, -1 * res)
+
+    lhcp_gain_pattern = nadir_pattern["LHCP"]
+    rhcp_gain_pattern = nadir_pattern["RHCP"]
+
+    sp_theta_ant = sp_angle_ant[0]
+    sp_az_ant = sp_angle_ant[1]
+
+    az_index = np.argmin(np.abs(sp_az_ant - az_deg))
+    el_index = np.argmin(np.abs(sp_theta_ant - el_deg))
+
+    lhcp_gain_dbi = lhcp_gain_pattern[el_index, az_index]
+    rhcp_gain_dbi = rhcp_gain_pattern[el_index, az_index]
+
+    sx_rx_gain = [lhcp_gain_dbi, rhcp_gain_dbi]
+
+    return sx_rx_gain
+
+
 def ecef2brf(P, V, S_ecef, SC_att):
     """
     this function computes the elevation (theta) and azimuth (phi) angle of a

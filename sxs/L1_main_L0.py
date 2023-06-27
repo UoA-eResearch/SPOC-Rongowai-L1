@@ -22,6 +22,7 @@ from load_files import (
     load_dat_file_grid,
     write_netcdf,
     load_A_phy_LUT,
+    get_surf_type2,
 )
 from specular import (
     sp_solver,
@@ -36,6 +37,7 @@ from specular import (
     delay_correction,
     deldop,
     los_status,
+    get_sx_rx_gain,
 )
 from projections import ecef2lla
 

@@ -290,6 +290,40 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
     return {"lat": local_lat, "lon": local_lon, "ele": local_ele}
 
 
+def get_pek_value(lat, lon, water_mask):
+    # minus 1 to account for 0-base indexing
+    lat_index = math.ceil((water_mask["lat_max"] - lat) / water_mask["res_deg"]) - 1
+    lon_index = math.ceil((lon - water_mask["lon_min"]) / water_mask["res_deg"]) - 1
+
+    data = water_mask["file"].read(1, window=Window(lat_index, lon_index, 1, 1))
+    return data
+
+
+def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
+    # this function returns the surface type of a coordinate P <lat lon>
+    # P[0] = lat, P[1] = lon
+    landcover_type = get_landcover_type2(P[0], P[1], lcv_mask)
+
+    lat_pek = int(abs(P[0]) // 10 * 10)
+    lon_pek = int(abs(P[1]) // 10 * 10)
+
+    file_id = str(lon_pek) + "E_" + str(lat_pek) + "S"
+    # water_mask1 = water_mask[file_id]
+    pek_value = get_pek_value(P[0], P[1], water_mask[file_id])
+
+    dist_coast = cst_mask((P[1], P[0]))
+
+    if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
+        # surface_type = 3  # not consistent with matlab code
+        surface_type = 0  # coordinate on inland water
+    elif all([pek_value > 0, dist_coast < 0.5]):
+        surface_type = -1
+    else:
+        surface_type = landcover_type
+
+    return surface_type
+
+
 def get_landcover_type2(lat_P, lon_P, lcv_mask):
     """% this function returns the landcover type of the coordinate P (lat lon)
     % over landsurface"""
