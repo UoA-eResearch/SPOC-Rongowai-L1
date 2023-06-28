@@ -175,7 +175,7 @@ def ddm_calibration(
             ddm_power_counts[sec][ngrx_channel] = ddm_power_counts1
             power_analog[sec][ngrx_channel] = ddm_power_watts1
             # 0-based index
-            ddm_ant[sec][ngrx_channel] = ANZ_port1
+            ddm_ant[sec][ngrx_channel] = ANZ_port1 + 1
 
 
 def get_quality_flag(quality_flag1):
