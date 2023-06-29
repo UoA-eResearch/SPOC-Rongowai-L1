@@ -907,8 +907,8 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     term2 = R_tsp + R_rsp
 
     # semi axis
-    a = math.sqrt(_lambda * term1 / term2)  # major semi
-    b = a / math.cos(math.radians(inc_angle))  # minor semi
+    a = math.sqrt(_lambda * term1 / term2)  # minor semi
+    b = a / math.cos(math.radians(inc_angle))  # major semi
 
     # compute orientation relative to North
     lon, lat, alt = ecef2lla.transform(*sx_pos_xyz, radians=False)
@@ -928,15 +928,15 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
 
     theta = math.degrees(math.acos(term3 / term4))
 
-    fresnel_axis = [2 * a, 2 * b]
+    fresnel_axis = [2 * b, 2 * a]
     fresnel_orientation = theta
 
     # fresenel coefficient only compute for ocean SPs
     fresnel_coeff = np.nan
 
     if dist_to_coast <= 0:
-        sint = math.sin(math.radians(inc_angle))
-        cost = math.cos(math.radians(inc_angle))
+        sint = math.degrees(math.sin(math.radians(inc_angle)))
+        cost = math.degrees(math.cos(math.radians(inc_angle)))
 
         temp1 = cmath.sqrt(eps_ocean - sint * sint)
 
@@ -946,9 +946,10 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
         R_rl = (R_vv - R_hh) / 2
         R_rr = (R_vv + R_hh) / 2
 
+        # -1 offset due to Matlab/Python indexing difference
         if ddm_ant == 1:
             fresnel_coeff = abs(R_rl) * abs(R_rl)
-
+        # -1 offset due to Matlab/Python indexing difference
         elif ddm_ant == 2:
             fresnel_coeff = abs(R_rr) * abs(R_rr)
 
