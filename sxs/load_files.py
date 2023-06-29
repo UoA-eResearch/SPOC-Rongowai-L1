@@ -314,8 +314,8 @@ def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
     dist_coast = cst_mask((P[1], P[0]))
 
     if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
-        # surface_type = 3  # not consistent with matlab code
-        surface_type = 0  # coordinate on inland water
+        surface_type = 3  # not consistent with matlab code
+        # surface_type = 0  # coordinate on inland water
     elif all([pek_value > 0, dist_coast < 0.5]):
         surface_type = -1
     else:
@@ -332,7 +332,7 @@ def get_landcover_type2(lat_P, lon_P, lcv_mask):
     lat_max, lat_range, lat_M = -34, 13.5, 21000
     lat_res = lat_range / lat_M
     lon_min, lon_range, lon_N = 165.75, 13.5, 21000
-    lon_res = lat_range / lon_N
+    lon_res = lon_range / lon_N
 
     # -1 to account for 1-based (matlab) vs 0-base indexing
     lat_index = math.ceil((lat_max - lat_P) / lat_res) - 1
