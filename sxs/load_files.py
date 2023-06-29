@@ -448,27 +448,9 @@ def write_netcdf(dict_in, definition_file, output_file):
                     var_k.comment = ds_k["Comment"].values[0]
                     var_k[()] = v
             else:  # variable
-                if get_datatype(ds_k) in ["single", "double"]:
-                    var_k = ncfile.createVariable(
-                        k,
-                        get_datatype(ds_k),
-                        get_dimensions(ds_k),
-                        fill_value=np.nan,
-                        zlib=True,
-                    )
-                else:
-                    if k in ["raw_counts"]:
-                        var_k = ncfile.createVariable(
-                            k,
-                            get_datatype(ds_k),
-                            get_dimensions(ds_k),
-                            fill_value=0,
-                            zlib=True,
-                        )
-                    else:
-                        var_k = ncfile.createVariable(
-                            k, get_datatype(ds_k), get_dimensions(ds_k), zlib=True
-                        )
+                var_k = ncfile.createVariable(
+                    k, get_datatype(ds_k), get_dimensions(ds_k), zlib=True
+                )
                 var_k.units = ds_k["Units"].values[0]
                 var_k.long_name = ds_k["Long_name"].values[0]
                 var_k.comment = ds_k["Comment"].values[0]
