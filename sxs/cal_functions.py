@@ -95,6 +95,7 @@ def ddm_calibration(
     ddm_power_counts,
     power_analog,
     ddm_ant,
+    inst_gain,
 ):
     """Calibrates raw DDMs into power DDMs in Watts
 
@@ -122,6 +123,8 @@ def ddm_calibration(
         Empty 4D array to recieve calibrated powers of DDMs in Watts
     ddm_ant : numpy.array()
         Empty array to receive ANZ_port of each DDM
+    inst_gain : numpy.array()
+        Empty array to receive inst_gain
     """
     # derive signal power
     # iterate over seconds of flight
@@ -176,6 +179,7 @@ def ddm_calibration(
             power_analog[sec][ngrx_channel] = ddm_power_watts1
             # 0-based index
             ddm_ant[sec][ngrx_channel] = ANZ_port1 + 1
+            inst_gain[sec][ngrx_channel] = inst_gain1
 
 
 def get_quality_flag(quality_flag1):

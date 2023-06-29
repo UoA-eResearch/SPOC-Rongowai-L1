@@ -516,6 +516,7 @@ ddm_calibration(
     ddm_power_counts,
     power_analog,
     ddm_ant,
+    inst_gain,
 )
 
 # save outputs to L1 structure
