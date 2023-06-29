@@ -300,7 +300,11 @@ L1_postCal["time_coverage_resolution"] = ddm_utc[1] - ddm_utc[0]
 hours, remainder = divmod((ddm_utc[-1] - ddm_utc[0] + 1), 3600)
 minutes, seconds = divmod(remainder, 60)
 
-ref_timestamp_utc = ddm_utc
+# below is new for algorithm version 1.1
+ref_timestamp_utc = ddm_utc[0]
+
+pvt_timestamp_utc = pvt_utc - ref_timestamp_utc
+ddm_timestamp_utc = ddm_utc - ref_timestamp_utc
 
 L1_postCal[
     "time_coverage_duration"
@@ -332,11 +336,11 @@ L1_postCal["per_bin_ant_version"] = "1"
 # write timestamps and ac-related variables
 L1_postCal["pvt_timestamp_gps_week"] = pvt_gps_week
 L1_postCal["pvt_timestamp_gps_sec"] = pvt_gps_sec
-L1_postCal["pvt_timestamp_utc"] = pvt_utc - ref_timestamp_utc
+L1_postCal["pvt_timestamp_utc"] = pvt_timestamp_utc
 
 L1_postCal["ddm_timestamp_gps_week"] = gps_week
 L1_postCal["ddm_timestamp_gps_sec"] = gps_tow
-L1_postCal["ddm_timestamp_utc"] = ddm_utc - ref_timestamp_utc
+L1_postCal["ddm_timestamp_utc"] = ddm_timestamp_utc
 
 L1_postCal["ddm_pvt_bias"] = ddm_pvt_bias
 
