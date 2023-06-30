@@ -2,15 +2,17 @@
 # load_files.py
 # Functions relating to the finding, loading, and processing of input files
 
-import netCDF4
+import netCDF4 as nc
 import array
-import math
 import numpy as np
-import pandas as pd
 import os
 from pathlib import Path
-from scipy.interpolate import interp1d, RegularGridInterpolator
-from rasterio.windows import Window
+from PIL import Image
+import rasterio
+from scipy.interpolate import RegularGridInterpolator
+
+# Required to load the land cover mask file
+Image.MAX_IMAGE_PIXELS = None
 
 # binary types for loading of gridded binary files
 grid_type_list = [
@@ -22,15 +24,162 @@ grid_type_list = [
     ("num_lon", "H"),
 ]
 
-# L = 18030
-# grid_res = 30  # L may need to be updated in the future
 
-# define constants once, used in LOCAL_DEM function
-LOCAL_DEM_L = 90
-LOCAL_DEM_RES = 30
-LOCAL_DEM_MARGIN = 0
-LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
-LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
+class L0_file:
+    """
+    Basic class to hold variables from the input L0 file
+    """
+
+    def __init__(self, filename):
+        ds = nc.Dataset(filename)
+        # load in rx-related variables
+        # PVT GPS week and sec
+        self.pvt_gps_week = load_netcdf(ds["/science/GPS_week_of_SC_attitude"])
+        self.pvt_gps_sec = load_netcdf(ds["/science/GPS_second_of_SC_attitude"])
+        # rx positions in ECEF, metres
+        self.rx_pos_x_pvt = load_netcdf(ds["/geometry/receiver/rx_position_x_ecef_m"])
+        self.rx_pos_y_pvt = load_netcdf(ds["/geometry/receiver/rx_position_y_ecef_m"])
+        self.rx_pos_z_pvt = load_netcdf(ds["/geometry/receiver/rx_position_z_ecef_m"])
+        # rx velocity in ECEF, m/s
+        self.rx_vel_x_pvt = load_netcdf(ds["/geometry/receiver/rx_velocity_x_ecef_mps"])
+        self.rx_vel_y_pvt = load_netcdf(ds["/geometry/receiver/rx_velocity_y_ecef_mps"])
+        self.rx_vel_z_pvt = load_netcdf(ds["/geometry/receiver/rx_velocity_z_ecef_mps"])
+        # rx attitude, deg | TODO this is actually radians and will be updated
+        self.rx_pitch_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_pitch_deg"])
+        self.rx_roll_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_roll_deg"])
+        self.rx_yaw_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_yaw_deg"])
+        # rx clock bias and drifts
+        self.rx_clk_bias_m_pvt = load_netcdf(ds["/geometry/receiver/rx_clock_bias_m"])
+        self.rx_clk_drift_mps_pvt = load_netcdf(
+            ds["/geometry/receiver/rx_clock_drift_mps"]
+        )
+
+        # TODO: Some processing required here to fix leading/trailing/sporadic "zero" values?
+
+        # load in ddm-related variables
+        # tx ID/satellite PRN
+        self.transmitter_id = load_netcdf(ds["/science/ddm/transmitter_id"])
+        # raw counts and ddm parameters
+        self.first_scale_factor = load_netcdf(ds["/science/ddm/first_scale_factor"])
+        # raw counts, uncalibrated
+        self.raw_counts = load_netcdf(ds["/science/ddm/counts"])
+        self.zenith_i2q2 = load_netcdf(ds["/science/ddm/zenith_i2_plus_q2"])
+        self.rf_source = load_netcdf(ds["/science/ddm/RF_source"])
+        # binning standard deviation
+        self.std_dev_rf1 = load_netcdf(ds["/science/ddm/RF1_zenith_RHCP_std_dev"])
+        self.std_dev_rf2 = load_netcdf(ds["/science/ddm/RF2_nadir_LHCP_std_dev"])
+        self.std_dev_rf3 = load_netcdf(ds["/science/ddm/RF3_nadir_RHCP_std_dev"])
+
+        # delay bin resolution
+        self.delay_bin_res = load_netcdf(ds["/science/ddm/delay_bin_res_narrow"])
+        self.delay_bin_res = self.delay_bin_res[~np.isnan(self.delay_bin_res)][0]
+        # doppler bin resolution
+        self.doppler_bin_res = load_netcdf(ds["/science/ddm/doppler_bin_res_narrow"])
+        self.doppler_bin_res = self.doppler_bin_res[~np.isnan(self.doppler_bin_res)][0]
+
+        # delay and Doppler center bin
+        self.center_delay_bin = load_netcdf(ds["/science/ddm/ddm_center_delay_bin"])
+        self.center_delay_bin = self.center_delay_bin[~np.isnan(self.center_delay_bin)][
+            0
+        ]
+        self.center_doppler_bin = load_netcdf(ds["/science/ddm/ddm_center_doppler_bin"])
+        self.center_doppler_bin = self.center_doppler_bin[
+            ~np.isnan(self.center_doppler_bin)
+        ][0]
+
+        # absolute ddm center delay and doppler
+        self.delay_center_chips = load_netcdf(
+            ds["/science/ddm/center_delay_bin_code_phase"]
+        )
+        self.doppler_center_hz = load_netcdf(
+            ds["/science/ddm/center_doppler_bin_frequency"]
+        )
+
+        # coherent duration and noncoherent integration
+        self.coherent_duration = (
+            load_netcdf(ds["/science/ddm/L1_E1_coherent_duration"]) / 1000
+        )
+        self.non_coherent_integrations = (
+            load_netcdf(ds["/science/ddm/L1_E1_non_coherent_integrations"]) / 1000
+        )
+
+        # NGRx estimate additional delay path
+        self.add_range_to_sp_pvt = load_netcdf(
+            ds["/science/ddm/additional_range_to_SP"]
+        )
+
+        # antenna temperatures and engineering timestamp
+        self.eng_timestamp = load_netcdf(ds["/eng/packet_creation_time"])
+        self.zenith_ant_temp_eng = load_netcdf(ds["/eng/zenith_ant_temp"])
+        self.nadir_ant_temp_eng = load_netcdf(ds["/eng/nadir_ant_temp"])
+
+        # Define important file shape/ength variables
+        self.I = self.transmitter_id.shape[0]
+        self.J = self.transmitter_id.shape[1]
+        self.J_2 = int(self.J / 2)
+        self.shape_2d = self.transmitter_id.shape
+        self.shape_4d = self.raw_counts.shape
+
+
+class input_files:
+    """
+    Basic class to hold data from input files
+    """
+
+    def __init__(
+        self,
+        L1a_cal_ddm_counts_db_filename,
+        L1a_cal_ddm_power_dbm_filename,
+        dem_filename,
+        dtu_filename,
+        landmask_filename,
+        lcv_filename,
+        water_mask_paths,
+        pek_path,
+        SV_PRN_filename,
+        SV_eirp_filename,
+        rng_filenames,
+        A_phy_LUT_path,
+    ):
+        self.L1a_cal_ddm_counts_db = np.loadtxt(L1a_cal_ddm_counts_db_filename)
+        self.L1a_cal_ddm_power_dbm = np.loadtxt(L1a_cal_ddm_power_dbm_filename)
+
+        self.dem = rasterio.open(dem_filename)
+        self.dem = {
+            "ele": self.dem.read(1),
+            "lat": np.linspace(
+                self.dem.bounds.top, self.dem.bounds.bottom, self.dem.height
+            ),
+            "lon": np.linspace(
+                self.dem.bounds.left, self.dem.bounds.right, self.dem.width
+            ),
+        }
+
+        self.dtu10 = load_dat_file_grid(dtu_filename)
+        self.landmask_nz = load_dat_file_grid(landmask_filename)
+        self.lcv_mask = Image.open(lcv_filename)
+
+        self.water_mask = {}
+        for path in water_mask_paths:
+            self.water_mask[path] = {}
+            pek_file = rasterio.open(pek_path.joinpath("occurrence_" + path + ".tif"))
+            self.water_mask[path]["lon_min"] = pek_file._transform[0]
+            self.water_mask[path]["res_deg"] = pek_file._transform[1]
+            self.water_mask[path]["lat_max"] = pek_file._transform[3]
+            self.water_mask[path]["file"] = pek_file
+
+        self.SV_PRN_LUT = np.loadtxt(SV_PRN_filename, usecols=(0, 1))
+        self.SV_eirp_LUT = np.loadtxt(SV_eirp_filename)
+
+        self.LHCP_pattern = {
+            "LHCP": load_antenna_pattern(rng_filenames[0]),
+            "RHCP": load_antenna_pattern(rng_filenames[1]),
+        }
+        self.RHCP_pattern = {
+            "LHCP": load_antenna_pattern(rng_filenames[2]),
+            "RHCP": load_antenna_pattern(rng_filenames[3]),
+        }
+        self.rx_alt_bins, self.A_phy_LUT_interp = load_A_phy_LUT(A_phy_LUT_path)
 
 
 def load_netcdf(netcdf_variable):
@@ -153,7 +302,7 @@ def load_A_phy_LUT(filepath):
 
 # calculate which orbit file to load
 # TODO automate retrieval of orbit files for new days
-def get_orbit_file(gps_week, gps_tow, start_obj, end_obj, change_idx=0):
+def load_orbit_file(gps_week, gps_tow, start_obj, end_obj, change_idx=0):
     """Determine which orbital file to use based upon gps_week and gps_tow.
 
     Parameters
@@ -204,7 +353,7 @@ def get_orbit_file(gps_week, gps_tow, start_obj, end_obj, change_idx=0):
     if change_idx:
         # if change_idx then also determine the day priors orbit file and return both
         # substitute in last gps_week/gps_tow values as first, end_obj as start_obj
-        sp3_filename2_full = get_orbit_file(
+        sp3_filename2_full = load_orbit_file(
             gps_week[-1:], gps_tow[-1:], end_obj, end_obj, change_idx=0
         )
         return sp3_filename1_full, sp3_filename2_full
@@ -243,233 +392,3 @@ def load_dat_file_grid(filepath):
     return RegularGridInterpolator(
         (data["lon"], data["lat"]), data["ele"], bounds_error=True
     )
-
-
-def interp_ddm(x, y, x_ddm):
-    """Interpolate DDM data onto new grid of points.
-
-    Parameters
-    ----------
-    x : numpy.array()
-        array of x values to create interpolation
-    y : numpy.array()
-        array of y values to create interpolation
-    x_ddm : numpy.array()
-        new x data to interpolate
-
-    Returns
-    -------
-    y_ddm : numpy.array()
-        interpolated y values corresponding to x_ddm
-    """
-    # regrid ddm data using 1d interpolator
-    interp_func = interp1d(x, y, kind="linear", fill_value="extrapolate")
-    return interp_func(x_ddm)
-
-
-def get_local_dem(sx_pos_lla, dem, dtu10, dist):
-    lon_index = np.argmin(abs(dem["lon"] - sx_pos_lla[1]))
-    lat_index = np.argmin(abs(dem["lat"] - sx_pos_lla[0]))
-
-    local_lon = dem["lon"][lon_index - LOCAL_HALF_NP : lon_index + LOCAL_HALF_NP + 1]
-    local_lat = dem["lat"][lat_index - LOCAL_HALF_NP : lat_index + LOCAL_HALF_NP + 1]
-
-    if dist > LOCAL_DEM_MARGIN:
-        local_ele = dem["ele"][
-            lat_index - LOCAL_HALF_NP : lat_index + LOCAL_HALF_NP + 1,
-            lon_index - LOCAL_HALF_NP : lon_index + LOCAL_HALF_NP + 1,
-        ]
-    else:
-        local_ele = dtu10(
-            (
-                np.tile(local_lon, LOCAL_NUM_PIXELS),
-                np.repeat(local_lat, LOCAL_NUM_PIXELS),
-            )
-        ).reshape(-1, LOCAL_NUM_PIXELS)
-
-    return {"lat": local_lat, "lon": local_lon, "ele": local_ele}
-
-
-def get_pek_value(lat, lon, water_mask):
-    # minus 1 to account for 0-base indexing
-    lat_index = math.ceil((water_mask["lat_max"] - lat) / water_mask["res_deg"]) - 1
-    lon_index = math.ceil((lon - water_mask["lon_min"]) / water_mask["res_deg"]) - 1
-
-    data = water_mask["file"].read(1, window=Window(lat_index, lon_index, 1, 1))
-    return data
-
-
-def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
-    # this function returns the surface type of a coordinate P <lat lon>
-    # P[0] = lat, P[1] = lon
-    landcover_type = get_landcover_type2(P[0], P[1], lcv_mask)
-
-    lat_pek = int(abs(P[0]) // 10 * 10)
-    lon_pek = int(abs(P[1]) // 10 * 10)
-
-    file_id = str(lon_pek) + "E_" + str(lat_pek) + "S"
-    # water_mask1 = water_mask[file_id]
-    pek_value = get_pek_value(P[0], P[1], water_mask[file_id])
-
-    dist_coast = cst_mask((P[1], P[0]))
-
-    if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
-        surface_type = 3  # not consistent with matlab code
-        # surface_type = 0  # coordinate on inland water
-    elif all([pek_value > 0, dist_coast < 0.5]):
-        surface_type = -1
-    else:
-        surface_type = landcover_type
-
-    return surface_type
-
-
-def get_landcover_type2(lat_P, lon_P, lcv_mask):
-    """% this function returns the landcover type of the coordinate P (lat lon)
-    % over landsurface"""
-
-    # bounding box is hardcoded, so N/M dimensions should be too...
-    lat_max, lat_range, lat_M = -34, 13.5, 21000
-    lat_res = lat_range / lat_M
-    lon_min, lon_range, lon_N = 165.75, 13.5, 21000
-    lon_res = lon_range / lon_N
-
-    # -1 to account for 1-based (matlab) vs 0-base indexing
-    lat_index = math.ceil((lat_max - lat_P) / lat_res) - 1
-    lon_index = math.ceil((lon_P - lon_min) / lon_res) - 1
-
-    lcv_RGB1 = lcv_mask.getpixel((lon_index, lat_index))
-    # drop alpha channel in index 3
-    lcv_RGB = tuple([z / 255 for z in lcv_RGB1[:3]])
-    color = [
-        (0.8, 0, 0.8),  # 1: artifical
-        (0.6, 0.4, 0.2),  # 2: barely vegetated
-        (0, 0, 1),  # 3: inland water
-        (1, 1, 0),  # 4: crop
-        (0, 1, 0),  # 5: grass
-        (0.6, 0.2, 0),  # 6: shrub
-        (0, 0.2, 0),  # 7: forest
-    ]
-
-    landcover_type = 0
-
-    if sum(lcv_RGB) == 3:
-        landcover_type = -1
-    else:
-        for idx, val in enumerate(color):
-            if lcv_RGB == val:
-                landcover_type = idx + 1  # match matlab indexes
-            # else:
-            #     raise Exception("landcover type not found")
-
-    assert (
-        landcover_type != 0
-    ), f"landcover type not find. landcover_type = {landcover_type} lcv_RGB = {lcv_RGB}."
-
-    return landcover_type
-
-
-def get_datatype(data_series, value=None):
-    datatype = data_series["Data_type"].values[0]
-    if datatype == "single":
-        return np.single
-    elif datatype == "double":
-        return np.double
-    elif datatype == "int8":
-        return np.int8
-    elif datatype == "int16":
-        return np.int16
-    elif datatype == "int32":
-        return np.int32
-    elif datatype == "int64":
-        return np.int64
-    elif datatype == "uint8":
-        return np.uint8
-    elif datatype == "uint16":
-        return np.uint16
-    elif datatype == "uint32":
-        return np.uint32
-    elif datatype == "uint64":
-        return np.uint64
-    elif datatype == "string":
-        if isinstance(value, str):
-            return "S" + str(len(value))
-    else:
-        raise Exception(f"datatype '{datatype}' not supported")
-
-
-def get_dimensions(data_series):
-    dim = data_series["Dimensions"].values[0].split(",")
-    return tuple([x.strip() for x in dim])
-
-
-def write_netcdf(dict_in, definition_file, output_file):
-    assert isinstance(dict_in, dict), "input must be a dictionary"
-    assert (
-        Path(definition_file).suffix == ".xlsx"
-    ), "definition file must be a .xlsx file"
-
-    # read definition file
-    df = pd.read_excel(definition_file)
-
-    # open netcdf file
-    with netCDF4.Dataset(output_file, mode="w") as ncfile:
-        # create dimensions
-        ncfile.createDimension("sample", None)
-        ncfile.createDimension("ddm", None)
-        ncfile.createDimension("delay", None)
-        ncfile.createDimension("doppler", None)
-
-        for k, v in dict_in.items():
-            print("writing: ", k)
-            ds_k = df[df["Name"] == k]
-
-            if ds_k.empty:
-                print(
-                    f"Warning: variable {k} not found in definition file, skip this variable."
-                )
-                continue
-            elif len(ds_k) > 1:
-                print(
-                    f"Warning: find multiple variable {k} definition in definition file, skip this variable."
-                )
-                continue
-
-            # if ds_k["Data_type"].str.contains("attribute").any():  # attribute
-            if ds_k["Dimensions"].item() == "<none>":
-                if ds_k["Units"].item() == "<none>":  # scalar
-                    ncfile.setncattr(k, str(v))
-                else:
-                    var_k = ncfile.createVariable(
-                        k, get_datatype(ds_k, v), (), zlib=True
-                    )
-                    var_k.units = ds_k["Units"].values[0]
-                    var_k.long_name = ds_k["Long_name"].values[0]
-                    var_k.comment = ds_k["Comment"].values[0]
-                    var_k[()] = v
-            else:  # variable
-                var_k = ncfile.createVariable(
-                    k, get_datatype(ds_k), get_dimensions(ds_k), zlib=True
-                )
-                var_k.units = ds_k["Units"].values[0]
-                var_k.long_name = ds_k["Long_name"].values[0]
-                var_k.comment = ds_k["Comment"].values[0]
-                if len(get_dimensions(ds_k)) == len(v.shape) == 1:
-                    var_k[:] = v
-                elif len(get_dimensions(ds_k)) == len(v.shape) == 2:
-                    var_k[:, :] = v
-                elif len(get_dimensions(ds_k)) == len(v.shape) == 3:
-                    var_k[:, :, :] = v
-                elif len(get_dimensions(ds_k)) == len(v.shape) == 4:
-                    var_k[:, :, :, :] = v
-                elif (
-                    len(get_dimensions(ds_k)) == 3
-                    and len(v.shape) == 4
-                    and v.shape[3] == 1
-                ):  # norm_refl_waveform
-                    var_k[:, :, :] = np.squeeze(v, axis=3)
-                else:
-                    raise Exception(f"variable {k} has unsupported dimensions")
-
-        # print the Dataset object to see what we've got
-        print(ncfile)

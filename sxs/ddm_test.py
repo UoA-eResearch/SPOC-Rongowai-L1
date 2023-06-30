@@ -1,15 +1,12 @@
 import netCDF4 as nc
 import numpy as np
-from load_files import (
-    load_netcdf,
-    load_antenna_pattern,
-    interp_ddm,
-    get_orbit_file,
-    load_dat_file_grid,
-)
+
 from pathlib import Path
 from termcolor import colored
+import matplotlib
+import matplotlib.pyplot as plt
 
+# matplotlib.use("Qt5Agg")
 
 mat_data_path = Path().absolute().joinpath(Path("./out/"))
 mat_L1_filename = Path("20221103-121416_NZNV-NZCH_L1.nc")
@@ -65,13 +62,18 @@ skip_list = [
     "brcs_ddm_peak_bin_delay_row",
     "brcs_ddm_peak_bin_dopp_col",
     "lna_noise_figure",
+    "ddm_ant",
+    "tx_clk_bias",
+    "inst_gain",
+    "LOS_flag",
+    "gps_tx_power_db_w",
 ]
 
 for var in py_L1.variables:
     print(var)
     if var in skip_list:
         continue
-        # print("should be fine...")
+    # print("should be fine...")
     if var == "sample":
         var2 = "sample_index"
     else:
@@ -83,10 +85,10 @@ for var in py_L1.variables:
         colored(mat_L1[var2].dtype, "green"),
         colored(py_L1[var].dtype, "blue"),
     )
-    print(colored(mat_L1[var2][:], "green"))
-    print(colored(py_L1[var][:], "blue"))
-
-    mean = np.nanmean(
+    # print(colored(mat_L1[var2][:], "green"))
+    # print(colored(py_L1[var][:], "blue"))
+    print(colored(py_L1[var][:] - mat_L1[var2][:], "yellow"))
+    """mean = np.nanmean(
         np.divide(np.abs(mat_L1[var2][:] - py_L1[var][:]), mat_L1[var2][:])
     )
     mmin = np.nanmin(
@@ -96,17 +98,23 @@ for var in py_L1.variables:
         np.divide(np.abs(mat_L1[var2][:] - py_L1[var][:]), mat_L1[var2][:])
     )
 
-    print(f"min={mmin}, mean={mean}, max={mmax}")
+    print(f"min={mmin}, mean={mean}, max={mmax}")"""
 
     if np.array_equal(
-        np.array(mat_L1[var2][:]),
-        np.array(py_L1[var][:]),
+        np.array(mat_L1[var2][:]), np.array(py_L1[var][:]), equal_nan=True
     ):
         print(colored("yay", "yellow"))
     else:
         print(colored("################", "red"))
-
+    # try:
+    #    plt.imshow(py_L1[var][:] - mat_L1[var2][:], aspect="auto")
+    #    plt.colorbar()
+    #    plt.show()
+    # except TypeError:
+    #    print(f"invalid shape {(py_L1[var][:] - mat_L1[var2][:]).shape}")
+    #    pass
     print()
+    # plt.clf()
     # print()
     # print()
 

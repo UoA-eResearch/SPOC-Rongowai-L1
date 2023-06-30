@@ -1,20 +1,19 @@
 # mike.laverick@auckland.ac.nz
 # Specular point related functions
+import geopy.distance as geo_dist
 import math
-import cmath
+from numba import njit
+from numba.typed import List as numba_list
 import numpy as np
+import pymap3d as pm
 import pyproj
 from scipy import constants
 from scipy.interpolate import interp2d
-from scipy.signal import convolve2d
-import geopy.distance as geo_dist
-import pymap3d as pm
-from numba import njit
-from numba.typed import List as numba_list
+from timeit import default_timer as timer
 
-from load_files import get_local_dem
-from cal_functions import db2power
+from utils import get_local_dem, get_surf_type2
 from projections import ecef2lla, lla2ecef
+
 
 # define WGS84
 wgs84 = pyproj.Geod(ellps="WGS84")
@@ -312,13 +311,6 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     % 2) in_angle_deg: local incidence angle at the specular reflection
     % 3) distance to coast in kilometer
     % 4) LOS flag"""
-
-    # check if LOS exists
-    # LOS_flag = los_status(tx_pos_xyz, rx_pos_xyz)
-
-    # if not LOS_flag:
-    #    # no sx if no LOS between rx and tx
-    #    return [np.nan, np.nan, np.nan], np.nan, np.nan, np.nan, LOS_flag
 
     # derive SP coordinate on WGS84 and DTU10
     sx_xyz_coarse, sx_lla_coarse = coarsetune(tx_pos_xyz, rx_pos_xyz)
@@ -624,386 +616,186 @@ def sp_related(tx, rx, sx_pos_xyz, SV_eirp_LUT):
     return sp_angle_body, sp_angle_enu, sp_angle_ant, theta_gps, range, gps_rad
 
 
-def get_amb_fun(dtau_s, dfreq_Hz, tau_c, Ti):
-    """
-    this function computes the ambiguity function
-    inputs
-    1) tau_s: delay in seconds
-    2) freq_Hz: Doppler in Hz
-    3) tau_c: chipping period in second, 1/chip_rate
-    4) Ti: coherent integration time in seconds
-    output
-    1) chi: ambiguity function, product of Lambda and S
-    """
-    det = tau_c * (1 + tau_c / Ti)  # discriminant for computing Lambda
-
-    Lambda = np.full_like(dtau_s, np.nan)
-
-    # compute Lambda - delay
-    Lambda[np.abs(dtau_s) <= det] = (1 - np.abs(dtau_s) / tau_c)[np.abs(dtau_s) <= det]
-    Lambda[np.abs(dtau_s) > det] = -tau_c / Ti
-
-    # compute S - Doppler
-    S1 = math.pi * dfreq_Hz * Ti
-
-    S = np.full_like(S1, np.nan, dtype=complex)
-
-    S[S1 == 0] = 1
-
-    term1 = np.sin(S1[S1 != 0]) / S1[S1 != 0]
-    term2 = np.exp(-1j * S1[S1 != 0])
-    S[S1 != 0] = term1 * term2
-
-    # compute complex chi
-    chi = Lambda * S
-    return chi
-
-
-def get_chi2(
-    num_delay_bins,
-    num_doppler_bins,
-    delay_center_bin,
-    doppler_center_bin,
-    delay_res,
-    doppler_res,
+def specular_calculations(
+    L0,
+    L1,
+    inp,
+    rx_pos_x,
+    rx_pos_y,
+    rx_pos_z,
+    rx_vel_x,
+    rx_vel_y,
+    rx_vel_z,
+    rx_roll,
+    rx_pitch,
 ):
-    # this function gets 2D AF
-
-    chip_rate = 1.023e6
-    tau_c = 1 / chip_rate
-    T_coh = 1 / 1000
-
-    # delay_res = 0.25
-    # doppler_res = 500
-    # delay_center_bin = 20  # 0-based index
-    # doppler_center_bin = 2  # 0-based index
-    # chi = np.zeros([num_delay_bins, num_doppler_bins])
-
-    def ix_func(i, j):
-        dtau = (i - delay_center_bin) * delay_res * tau_c
-        dfreq = (j - doppler_center_bin) * doppler_res
-        # compute complex AF value at each delay-doppler bin
-        return get_amb_fun(dtau, dfreq, tau_c, T_coh)
-
-    chi = np.fromfunction(
-        ix_func, (num_delay_bins, num_doppler_bins)
-    )  # 10 times faster than for loop
-
-    chi_mag = np.abs(chi)  # magnitude
-    chi2 = np.square(chi_mag)  # chi_square
-
-    return chi2
-
-
-def meter2chips(x):
-    """
-    this function converts from meters to chips
-    input: x - distance in meters
-    output: y - distance in chips
-    """
-    # define constants
-    c = 299792458  # light speed metre per second
-    chip_rate = 1.023e6  # L1 GPS chip-per-second, code modulation frequency
-    tau_c = 1 / chip_rate  # C/A code chiping period
-    l_chip = c * tau_c  # chip length
-    y = x / l_chip
-    return y
-
-
-def delay_correction(delay_chips_in, P):
-    # this function correct the input code phase to a value between 0 and
-    # a defined value P, P = 1023 for GPS L1 and P = 4092 for GAL E1
-    temp = delay_chips_in
-
-    if temp < 0:
-        while temp < 0:
-            temp = temp + P
-    elif temp > 1023:
-        while temp > 1023:
-            temp = temp - P
-
-    delay_chips_out = temp
-
-    return delay_chips_out
-
-
-def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
-    """
-    # This function computes absolute delay and doppler values for a given
-    # pixel whose coordinate is <lat,lon,ele>
-    # The ECEF position and velocity vectors of tx and rx are also required
-    # Inputs:
-    # 1) tx_xyz, rx_xyz: ecef position of tx, rx
-    # 2) tx_vel, rx_vel: ecef velocity of tx, rx
-    # 3) p_xyz of the pixel under computation
-    # Outputs:
-    # 1) delay_chips: delay measured in chips
-    # 2) doppler_Hz: doppler measured in Hz
-    # 3) add_delay_chips: additional delay measured in chips
-    """
-    # common parameters
-    c = 299792458  # light speed metre per second
-    fc = 1575.42e6  # L1 carrier frequency in Hz
-    _lambda = c / fc  # wavelength
-
-    V_tp = tx_pos_xyz - p_xyz
-    R_tp = np.linalg.norm(V_tp, 2)
-    V_tp_unit = V_tp / R_tp
-    V_rp = rx_pos_xyz - p_xyz
-    R_rp = np.linalg.norm(V_rp, 2)
-    V_rp_unit = V_rp / R_rp
-    V_tr = tx_pos_xyz - rx_pos_xyz
-    R_tr = np.linalg.norm(V_tr, 2)
-
-    delay = R_tp + R_rp
-    delay_chips = meter2chips(delay)
-    add_delay_chips = meter2chips(R_tp + R_rp - R_tr)
-
-    # absolute Doppler frequency in Hz
-    term1 = np.dot(tx_vel_xyz, V_tp_unit)
-    term2 = np.dot(rx_vel_xyz, V_rp_unit)
-
-    doppler_hz = -1 * (term1 + term2) / _lambda  # Doppler in Hz
-
-    return delay_chips, doppler_hz, add_delay_chips
-
-
-def get_ddm_Aeff4(
-    rx_alt,
-    inc_angle,
-    az_angle,
-    sp_delay_bin,
-    sp_doppler_bin,
-    chi2,
-    A_phy_LUT_interp,
-):
-    # this is to construct effective scattering area from LUTs
-
-    # center delay and doppler bin for full DDM
-    # not to be used elsewhere
-    center_delay_bin = 40
-    center_doppler_bin = 5
-
-    # derive full scattering area from LUT
-    A_phy_full_1 = A_phy_LUT_interp((rx_alt, inc_angle, az_angle))
-    A_phy_full_2 = np.vstack((np.zeros((1, 41)), A_phy_full_1, np.zeros((1, 41))))
-    A_phy_full = np.hstack((A_phy_full_2, np.zeros((9, 39))))
-
-    # shift A_phy_full according to the floating SP bin
-
-    # integer and fractional part of the SP bin
-    sp_delay_intg = np.floor(sp_delay_bin)
-    sp_delay_frac = sp_delay_bin - sp_delay_intg
-
-    sp_doppler_intg = np.floor(sp_doppler_bin)
-    sp_doppler_frac = sp_doppler_bin - sp_doppler_intg
-
-    # shift 1: shift along delay direction
-    A_phy_shift = np.roll(A_phy_full, 1)
-    A_phy_shift = (1 - sp_delay_frac) * A_phy_full + (sp_delay_frac * A_phy_shift)
-
-    # shift 2: shift along doppler direction
-    A_phy_shift2 = np.roll(A_phy_shift, 1, axis=0)
-    A_phy_shift = (1 - sp_doppler_frac) * A_phy_shift + (sp_doppler_frac * A_phy_shift2)
-
-    # crop the A_phy_full to Rongowai 5*40 DDM size
-    delay_shift_bin = center_delay_bin - sp_delay_intg
-    doppler_shift_bin = center_doppler_bin - sp_doppler_intg
-
-    # Change from Matlab offsets to account for Matlab/Python indexing differences
-    A_phy = A_phy_shift[
-        int(doppler_shift_bin - 1) : int(doppler_shift_bin + 4),
-        int(delay_shift_bin - 1) : int(delay_shift_bin + 39),
-    ]
-
-    # convolution to A_eff
-    A_eff1 = convolve2d(A_phy, chi2.T)
-    A_eff = A_eff1[2:7, 20:60]  # cut suitable size for A_eff, 0-based index
-
-    return A_eff
-
-
-def ddm_brcs2(power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, TSx, RSx):
-    """
-    This version has copol xpol antenna gain implemented
-    This function computes bistatic radar cross section (BRCS) according to
-    Bistatic radar equation based on the inputs as below
-    inputs:
-    1) power_analog: L1a product in watts
-    2) eirp_watt, rx_gain_db_i: gps eirp in watts and rx antenna gain in dBi
-    3) TSx, RSx: Tx to Sx and Rx to Sx ranges
-    outputs:
-    1) brcs: bistatic RCS
-    """
-    # define constants
-    f = 1575.42e6  # GPS L1 band, Hz
-    _lambda = constants.c / f  # wavelength, m
-    _lambda2 = _lambda * _lambda
-
-    # derive BRCS
-    rx_gain = db2power(rx_gain_db_i)  # linear rx gain
-    rx_gain2 = rx_gain.reshape(2, 2)
-    term1 = 4 * math.pi * np.power(4 * math.pi * TSx * RSx, 2)
-    term2 = eirp_watt * _lambda2
-    term3 = term1 / term2
-    # term4 = term3 * np.power(rx_gain2, -1)
-    term4 = term3 * np.linalg.matrix_power(rx_gain2, -1)
-
-    brcs_copol = (term4[0, 0] * power_analog_LHCP) + (term4[0, 1] * power_analog_RHCP)
-    brcs_xpol = (term4[1, 0] * power_analog_LHCP) + (term4[1, 1] * power_analog_RHCP)
-
-    return brcs_copol, brcs_xpol
-
-
-def ddm_refl2(
-    power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, R_tsx, R_rsx
-):
-    """
-    This function computes the land reflectivity by implementing the xpol
-    antenna gain
-    1)power_analog: L1a product, DDM power in watt
-    2)eirp_watt: transmitter eirp in watt
-    3)rx_gain_db_i: receiver antenna gain in the direction of SP, in dBi
-    4)R_tsx, R_rsx: tx to sp range and rx to sp range, in meters
-    outputs
-    1) copol and xpol reflectivity
-    """
-    # define constants
-    freq = 1575.42e6  # GPS L1 operating frequency, Hz
-    _lambda = constants.c / freq  # wavelength, meter
-    _lambda2 = _lambda * _lambda
-
-    rx_gain = db2power(rx_gain_db_i)  # convert antenna gain to linear form
-    rx_gain2 = rx_gain.reshape(2, 2)
-
-    term1 = np.power(4 * math.pi * (R_tsx + R_rsx), 2)
-    term2 = eirp_watt * _lambda2
-    term3 = term1 / term2
-
-    # term4 = term3 * np.power(rx_gain, -1)
-    term4 = term3 * np.linalg.matrix_power(rx_gain2, -1)
-
-    refl_copol = term4[0, 0] * power_analog_LHCP + term4[0, 1] * power_analog_RHCP
-    refl_xpol = term4[1, 0] * power_analog_LHCP + term4[1, 1] * power_analog_RHCP
-    return refl_copol, refl_xpol
-
-
-def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, ddm_ant):
-    """
-    this function derives Fresnel dimensions based on the Tx, Rx and Sx positions.
-    Fresnel dimension is computed only the DDM is classified as coherent reflection.
-    """
-    # define constants
-    eps_ocean = 74.62 + 51.92j  # complex permittivity of ocean
-    fc = 1575.42e6  # operating frequency
-    c = 299792458  # speed of light
-    _lambda = c / fc  # wavelength
-
-    # compute dimensions
-    R_tsp = np.linalg.norm(np.array(tx_pos_xyz) - np.array(sx_pos_xyz), 2)
-    R_rsp = np.linalg.norm(np.array(rx_pos_xyz) - np.array(sx_pos_xyz), 2)
-
-    term1 = R_tsp * R_rsp
-    term2 = R_tsp + R_rsp
-
-    # semi axis
-    a = math.sqrt(_lambda * term1 / term2)  # minor semi
-    b = a / math.cos(math.radians(inc_angle))  # major semi
-
-    # compute orientation relative to North
-    lon, lat, alt = ecef2lla.transform(*sx_pos_xyz, radians=False)
-    sx_lla = [lat, lon, alt]
-
-    tx_e, tx_n, _ = pm.ecef2enu(*tx_pos_xyz, *sx_lla, deg=True)
-    rx_e, rx_n, _ = pm.ecef2enu(*rx_pos_xyz, *sx_lla, deg=True)
-
-    tx_en = np.array([tx_e, tx_n])
-    rx_en = np.array([rx_e, rx_n])
-
-    vector_tr = rx_en - tx_en
-    unit_north = [0, 1]
-
-    term3 = np.dot(vector_tr, unit_north)
-    term4 = np.linalg.norm(vector_tr, 2) * np.linalg.norm(unit_north, 2)
-
-    theta = math.degrees(math.acos(term3 / term4))
-
-    fresnel_axis = [2 * b, 2 * a]
-    fresnel_orientation = theta
-
-    # fresenel coefficient only compute for ocean SPs
-    fresnel_coeff = np.nan
-
-    if dist_to_coast <= 0:
-        sint = math.degrees(math.sin(math.radians(inc_angle)))
-        cost = math.degrees(math.cos(math.radians(inc_angle)))
-
-        temp1 = cmath.sqrt(eps_ocean - sint * sint)
-
-        R_vv = (eps_ocean * cost - temp1) / (eps_ocean * cost + temp1)
-        R_hh = (cost - temp1) / (cost + temp1)
-
-        R_rl = (R_vv - R_hh) / 2
-        R_rr = (R_vv + R_hh) / 2
-
-        # -1 offset due to Matlab/Python indexing difference
-        if ddm_ant == 1:
-            fresnel_coeff = abs(R_rl) * abs(R_rl)
-        # -1 offset due to Matlab/Python indexing difference
-        elif ddm_ant == 2:
-            fresnel_coeff = abs(R_rr) * abs(R_rr)
-
-    return fresnel_coeff, fresnel_axis, fresnel_orientation
-
-
-def coh_det(raw_counts, snr_db):
-    """
-    this function computes the coherency of an input raw-count ddm
-    Inputs
-    1)raw ddm measured in counts
-    2)SNR measured in decibels
-    Outputs
-    1)coherency ratio (CR)
-    2)coherency state (CS)
-    """
-    peak_counts = np.amax(raw_counts)
-    delay_peak, dopp_peak = np.unravel_index(raw_counts.argmax(), raw_counts.shape)
-
-    # thermal noise exclusion
-    # TODO: the threshold may need to be redefined
-    if not np.isnan(snr_db):
-        thre_coeff = 1.055 * math.exp(-0.193 * snr_db)
-        thre = thre_coeff * peak_counts  # noise exclusion threshold
-
-        raw_counts[raw_counts < thre] = 0
-
-    # deterimine DDMA range
-    delay_range = list(range(delay_peak - 1, delay_peak + 2))
-    delay_min = min(delay_range)
-    delay_max = max(delay_range)
-    dopp_range = list(range(dopp_peak - 1, dopp_peak + 2))
-    dopp_min = min(dopp_range)
-    dopp_max = max(dopp_range)
-
-    # determine if DDMA is within DDM, refine if needed
-    if delay_min < 1:
-        delay_range = [0, 1, 2]
-    elif delay_max > 38:
-        delay_range = [37, 38, 39]
-
-    if dopp_min < 1:
-        dopp_range = [0, 1, 2]
-    elif dopp_max > 3:
-        dopp_range = [2, 3, 4]
-
-    C_in = np.sum(raw_counts[delay_range, :][:, dopp_range])  # summation of DDMA
-    C_out = np.sum(raw_counts) - C_in  # summation of DDM excluding DDMA
-
-    CR = C_in / C_out  # coherency ratio
-
-    if CR >= 2:
-        CS = 1
-    else:  # CR < 2
-        CS = 0
-
-    return CR, CS
+    # iterate over each second of flight
+    for sec in range(L0.I):
+        t0 = timer()
+        tn = 0
+        # retrieve rx positions, velocities and attitdues
+        # bundle up craft pos/vel/attitude data into per sec, and rx1
+        rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
+        rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
+        # Euler angels are now in radians and yaw is resp. North
+        # Hard-code of 0 due to alignment of antenna and craft
+        rx_attitude1 = np.array([rx_roll[sec], rx_pitch[sec], 0])  # rx_yaw[sec]])
+        rx1 = {
+            "rx_pos_xyz": rx_pos_xyz1,
+            "rx_vel_xyz": rx_vel_xyz1,
+            "rx_attitude": rx_attitude1,
+        }
+
+        # variables are solved only for LHCP channels
+        # RHCP channels share the same vales except RX gain solved for each channel
+        for ngrx_channel in range(L0.J_2):
+            # retrieve tx positions and velocities
+            # bundle up satellite position and velocity data into per sec, and tx1
+            tx_pos_xyz1 = np.array(
+                [
+                    L1.postCal["tx_pos_x"][sec][ngrx_channel],
+                    L1.postCal["tx_pos_y"][sec][ngrx_channel],
+                    L1.postCal["tx_pos_z"][sec][ngrx_channel],
+                ]
+            )
+            tx_vel_xyz1 = np.array(
+                [
+                    L1.postCal["tx_vel_x"][sec][ngrx_channel],
+                    L1.postCal["tx_vel_y"][sec][ngrx_channel],
+                    L1.postCal["tx_vel_z"][sec][ngrx_channel],
+                ]
+            )
+
+            trans_id1 = L1.postCal["prn_code"][sec][ngrx_channel]
+            sv_num1 = L1.postCal["sv_num"][sec][ngrx_channel]
+
+            ddm_ant1 = L1.postCal["ddm_ant"][sec][ngrx_channel]
+
+            tx1 = {
+                "tx_pos_xyz": tx_pos_xyz1,
+                "tx_vel_xyz": tx_vel_xyz1,
+                "sv_num": sv_num1,
+            }
+
+            # only process these with valid TX positions
+            # TODO is checking only pos_x enough? it could be.
+            if not np.isnan(L1.postCal["tx_pos_x"][sec][ngrx_channel]):
+                LOS_flag1 = los_status(tx_pos_xyz1, rx_pos_xyz1)
+
+                L1.postCal["LOS_flag"][sec][ngrx_channel] = int(LOS_flag1)
+
+                # only process samples with valid sx positions, i.e., LOS = True
+                if LOS_flag1:
+                    tn1 = timer()
+
+                    # Part 4.1: SP solver
+                    # derive SP positions, angle of incidence and distance to coast
+                    # returning sx_pos_lla1 in Py version to avoid needless coord conversions
+                    # derive sx velocity
+                    # time step in second
+                    dt = 1
+                    tx_pos_xyz_dt = tx_pos_xyz1 + (dt * tx_vel_xyz1)
+                    rx_pos_xyz_dt = rx_pos_xyz1 + (dt * rx_vel_xyz1)
+                    (
+                        sx_pos_xyz1,
+                        inc_angle_deg1,
+                        d_snell_deg1,
+                        dist_to_coast_km1,
+                    ) = sp_solver(
+                        tx_pos_xyz1, rx_pos_xyz1, inp.dem, inp.dtu10, inp.landmask_nz
+                    )
+
+                    (
+                        sx_pos_xyz_dt,
+                        _,
+                        _,
+                        _,
+                    ) = sp_solver(
+                        tx_pos_xyz_dt,
+                        rx_pos_xyz_dt,
+                        inp.dem,
+                        inp.dtu10,
+                        inp.landmask_nz,
+                    )
+                    tn += timer() - tn1
+
+                    lon, lat, alt = ecef2lla.transform(*sx_pos_xyz1, radians=False)
+                    sx_pos_lla1 = [lat, lon, alt]
+                    # <lon,lat,alt> of the specular reflection
+                    # algorithm version 1.11
+                    surface_type1 = get_surf_type2(
+                        sx_pos_lla1, inp.landmask_nz, inp.lcv_mask, inp.water_mask
+                    )
+
+                    sx_vel_xyz1 = np.array(sx_pos_xyz_dt) - np.array(sx_pos_xyz1)
+
+                    # save sx values to variables
+                    L1.postCal["sx_pos_x"][sec][ngrx_channel] = sx_pos_xyz1[0]
+                    L1.postCal["sx_pos_y"][sec][ngrx_channel] = sx_pos_xyz1[1]
+                    L1.postCal["sx_pos_z"][sec][ngrx_channel] = sx_pos_xyz1[2]
+
+                    L1.postCal["sx_lat"][sec][ngrx_channel] = sx_pos_lla1[0]
+                    L1.postCal["sx_lon"][sec][ngrx_channel] = sx_pos_lla1[1]
+                    L1.postCal["sx_alt"][sec][ngrx_channel] = sx_pos_lla1[2]
+
+                    L1.postCal["sx_vel_x"][sec][ngrx_channel] = sx_vel_xyz1[0]
+                    L1.postCal["sx_vel_y"][sec][ngrx_channel] = sx_vel_xyz1[1]
+                    L1.postCal["sx_vel_z"][sec][ngrx_channel] = sx_vel_xyz1[2]
+                    L1.surface_type[sec][ngrx_channel] = surface_type1
+                    L1.dist_to_coast_km[sec][ngrx_channel] = dist_to_coast_km1
+
+                    L1.postCal["sx_inc_angle"][sec][ngrx_channel] = inc_angle_deg1
+                    L1.postCal["sx_d_snell_angle"][sec][ngrx_channel] = d_snell_deg1
+
+                    # Part 4.2: SP-related variables - 1
+                    # this part derives tx/rx gains, ranges and other related variables
+                    # derive SP related geo-parameters, including angles in various frames, ranges and antenna gain/GPS EIRP
+                    (
+                        sx_angle_body1,
+                        sx_angle_enu1,
+                        sx_angle_ant1,
+                        theta_gps1,
+                        ranges1,
+                        gps_rad1,
+                    ) = sp_related(tx1, rx1, sx_pos_xyz1, inp.SV_eirp_LUT)
+
+                    # get values for deriving BRCS and reflectivity
+                    R_tsx1 = ranges1[0]
+                    R_rsx1 = ranges1[1]
+                    gps_eirp_watt1 = gps_rad1[2]
+
+                    # get active antenna gain for LHCP and RHCP channels
+                    sx_rx_gain_LHCP1 = get_sx_rx_gain(sx_angle_ant1, inp.LHCP_pattern)
+                    sx_rx_gain_RHCP1 = get_sx_rx_gain(sx_angle_ant1, inp.RHCP_pattern)
+
+                    # save to variables
+                    L1.postCal["sx_theta_body"][sec, ngrx_channel] = sx_angle_body1[0]
+                    L1.postCal["sx_az_body"][sec, ngrx_channel] = sx_angle_body1[1]
+                    L1.postCal["sx_theta_enu"][sec, ngrx_channel] = sx_angle_enu1[0]
+                    L1.postCal["sx_az_enu"][sec, ngrx_channel] = sx_angle_enu1[1]
+
+                    L1.gps_boresight[sec, ngrx_channel] = theta_gps1
+
+                    L1.postCal["tx_to_sp_range"][sec, ngrx_channel] = ranges1[0]
+                    L1.postCal["rx_to_sp_range"][sec, ngrx_channel] = ranges1[1]
+
+                    L1.postCal["gps_tx_power_db_w"][sec, ngrx_channel] = gps_rad1[0]
+                    L1.postCal["gps_ant_gain_db_i"][sec, ngrx_channel] = gps_rad1[1]
+                    L1.postCal["static_gps_eirp"][sec, ngrx_channel] = gps_rad1[2]
+
+                    # copol gain
+                    # LHCP channel rx gain
+                    L1.sx_rx_gain_copol[sec, ngrx_channel] = sx_rx_gain_LHCP1[0]
+                    # RHCP channel rx gain
+                    L1.sx_rx_gain_copol[sec, ngrx_channel + L0.J_2] = sx_rx_gain_RHCP1[
+                        1
+                    ]
+                    # xpol gain gain
+                    # LHCP channel rx gain
+                    L1.sx_rx_gain_xpol[sec, ngrx_channel] = sx_rx_gain_LHCP1[1]
+                    # RHCP channel rx gain
+                    L1.sx_rx_gain_xpol[sec, ngrx_channel + L0.J_2] = sx_rx_gain_RHCP1[0]
+        print(
+            f"******** start processing part 4A {sec} second data with {timer() - t0} ********"
+        )
+        print(f"*{tn}*")
