@@ -1,6 +1,7 @@
 import math
 import numpy as np
 from scipy.signal import convolve2d
+from timeit import default_timer as timer
 
 
 def meter2chips(x):
@@ -200,3 +201,134 @@ def get_chi2(
     chi2 = np.square(chi_mag)  # chi_square
 
     return chi2
+
+
+def noise_floor_prep(
+    L0,
+    L1,
+    delay_offset,
+    add_range_to_sp,
+    rx_pos_x,
+    rx_pos_y,
+    rx_pos_z,
+    rx_vel_x,
+    rx_vel_y,
+    rx_vel_z,
+):
+    t0 = timer()
+    # derive floating SP bin location and effective scattering area A_eff
+    for sec in range(L0.I):
+        # retrieve rx positions and velocities
+        rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
+        rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
+
+        for ngrx_channel in range(L0.J_2):
+            # retrieve tx positions and velocities
+            tx_pos_xyz1 = np.array(
+                [
+                    L1.postCal["tx_pos_x"][sec][ngrx_channel],
+                    L1.postCal["tx_pos_y"][sec][ngrx_channel],
+                    L1.postCal["tx_pos_z"][sec][ngrx_channel],
+                ]
+            )
+            tx_vel_xyz1 = np.array(
+                [
+                    L1.postCal["tx_vel_x"][sec][ngrx_channel],
+                    L1.postCal["tx_vel_y"][sec][ngrx_channel],
+                    L1.postCal["tx_vel_z"][sec][ngrx_channel],
+                ]
+            )
+
+            # retrieve sx-related parameters
+            sx_pos_xyz1 = np.array(
+                [
+                    L1.postCal["sx_pos_x"][sec][ngrx_channel],
+                    L1.postCal["sx_pos_y"][sec][ngrx_channel],
+                    L1.postCal["sx_pos_z"][sec][ngrx_channel],
+                ]
+            )
+
+            counts_LHCP1 = L1.ddm_power_counts[sec, ngrx_channel, :, :]
+            # from onboard tracker
+            add_range_to_sp1 = add_range_to_sp[sec][ngrx_channel]
+            delay_center_chips1 = L0.delay_center_chips[sec][ngrx_channel]
+
+            # zenith code phase
+            add_range_to_sp_chips1 = meter2chips(add_range_to_sp1)
+            zenith_code_phase1 = delay_center_chips1 + add_range_to_sp_chips1
+            zenith_code_phase1 = delay_correction(zenith_code_phase1, 1023)
+
+            # Part 3B: noise floor here to avoid another interation over [sec,L0.J_2]
+            nf_counts_LHCP1 = L1.ddm_power_counts[sec, ngrx_channel, :, :]
+            nf_counts_RHCP1 = L1.ddm_power_counts[sec, ngrx_channel + L0.J_2, :, :]
+
+            # delay_offset+1 due to difference between Matlab and Python indexing
+            noise_floor_bins_LHCP1 = nf_counts_LHCP1[-(delay_offset + 1) :, :]
+            noise_floor_bins_RHCP1 = nf_counts_RHCP1[-(delay_offset + 1) :, :]
+
+            if (not np.isnan(L1.postCal["tx_pos_x"][sec][ngrx_channel])) and (
+                not np.isnan(counts_LHCP1).all()
+            ):
+                # peak delay and doppler location
+                # assume LHCP and RHCP DDMs have the same peak location
+                peak_counts1 = np.max(counts_LHCP1)
+                # invert order compared to Matlab
+                [peak_delay_row1, peak_doppler_col1] = np.where(
+                    counts_LHCP1 == peak_counts1
+                )
+
+                # tx to rx range
+                r_trx1 = np.linalg.norm(
+                    np.array(tx_pos_xyz1) - np.array(rx_pos_xyz1), 2
+                )
+
+                # SOC derived more accurate additional range to SP
+                r_tsx1 = np.linalg.norm(
+                    np.array(tx_pos_xyz1) - np.array(sx_pos_xyz1), 2
+                )
+                r_rsx1 = np.linalg.norm(
+                    np.array(rx_pos_xyz1) - np.array(sx_pos_xyz1), 2
+                )
+
+                add_range_to_sp_soc1 = r_tsx1 + r_rsx1 - r_trx1
+                d_add_range1 = add_range_to_sp_soc1 - add_range_to_sp1
+
+                d_delay_chips1 = meter2chips(d_add_range1)
+                d_delay_bin1 = d_delay_chips1 / L0.delay_bin_res
+
+                sp_delay_row1 = L0.center_delay_bin - d_delay_bin1
+
+                # SP doppler value
+                _, sp_doppler_hz1, _ = deldop(
+                    tx_pos_xyz1, rx_pos_xyz1, tx_vel_xyz1, rx_vel_xyz1, sx_pos_xyz1
+                )
+
+                doppler_center_hz1 = L0.doppler_center_hz[sec][ngrx_channel]
+
+                d_doppler_hz1 = doppler_center_hz1 - sp_doppler_hz1 + 250
+                d_doppler_bin1 = d_doppler_hz1 / L0.doppler_bin_res
+
+                sp_doppler_col1 = L0.center_doppler_bin - d_doppler_bin1
+
+                # SP delay and doppler location
+                L1.peak_delay_row[sec][ngrx_channel] = peak_delay_row1[
+                    0
+                ]  # 0-based index
+                L1.peak_doppler_col[sec][ngrx_channel] = peak_doppler_col1[0]
+
+                L1.sp_delay_row[sec][ngrx_channel] = sp_delay_row1
+                L1.sp_delay_error[sec][ngrx_channel] = d_delay_chips1
+
+                L1.sp_doppler_col[sec][ngrx_channel] = sp_doppler_col1
+                L1.sp_doppler_error[sec][ngrx_channel] = d_doppler_hz1
+
+                L1.noise_floor_all_LHCP[sec][ngrx_channel] = np.nanmean(
+                    noise_floor_bins_LHCP1
+                )
+                L1.noise_floor_all_RHCP[sec][ngrx_channel] = np.nanmean(
+                    noise_floor_bins_RHCP1
+                )
+
+            L1.postCal["zenith_code_phase"][sec][ngrx_channel] = zenith_code_phase1
+
+    print(f"******** finish processing part 4B data with {timer() - t0}********")

@@ -91,7 +91,6 @@ class L1_file:
 
         self.postCal["ddm_ant"] = np.full([*L0.shape_2d], np.nan)  # 0-based
         self.postCal["inst_gain"] = np.full([*L0.shape_2d], np.nan)
-
         self.postCal["LOS_flag"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["sx_pos_x"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["sx_pos_y"] = np.full([*L0.shape_2d], np.nan)
@@ -108,7 +107,6 @@ class L1_file:
 
         self.postCal["sx_inc_angle"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["sx_d_snell_angle"] = np.full([*L0.shape_2d], np.nan)
-
         self.postCal["sx_theta_body"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["sx_az_body"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["sx_theta_enu"] = np.full([*L0.shape_2d], np.nan)
@@ -118,13 +116,25 @@ class L1_file:
 
         self.postCal["tx_to_sp_range"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["rx_to_sp_range"] = np.full([*L0.shape_2d], np.nan)
-
         self.postCal["gps_tx_power_db_w"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["gps_ant_gain_db_i"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["static_gps_eirp"] = np.full([*L0.shape_2d], np.nan)
 
         self.sx_rx_gain_copol = np.full([*L0.shape_2d], np.nan)
         self.sx_rx_gain_xpol = np.full([*L0.shape_2d], np.nan)
+
+        self.peak_delay_row = np.full([*L0.shape_2d], np.nan)
+        self.peak_doppler_col = np.full([*L0.shape_2d], np.nan)
+
+        self.sp_delay_row = np.full([*L0.shape_2d], np.nan)
+        self.sp_doppler_col = np.full([*L0.shape_2d], np.nan)
+        self.sp_delay_error = np.full([*L0.shape_2d], np.nan)
+        self.sp_doppler_error = np.full([*L0.shape_2d], np.nan)
+
+        self.noise_floor_all_LHCP = np.full([L0.I, L0.J_2], np.nan)
+        self.noise_floor_all_RHCP = np.full([L0.I, L0.J_2], np.nan)
+
+        self.postCal["zenith_code_phase"] = np.full([*L0.shape_2d], np.nan)
 
     def add_to_postcal(self):
         # quick hack for code variables that are saved with different dict names
@@ -135,8 +145,16 @@ class L1_file:
         self.postCal["gps_off_boresight_angle_deg"] = self.gps_boresight
         self.postCal["sp_rx_gain_copol"] = self.sx_rx_gain_copol
         self.postCal["sp_rx_gain_xpol"] = self.sx_rx_gain_xpol
+        self.postCal["brcs_ddm_peak_bin_delay_row"] = self.peak_delay_row
+        self.postCal["brcs_ddm_peak_bin_dopp_col"] = self.peak_doppler_col
+        self.postCal["brcs_ddm_sp_bin_delay_row"] = self.sp_delay_row
+        self.postCal["brcs_ddm_sp_bin_dopp_col"] = self.sp_doppler_col
+        self.postCal["sp_delay_error"] = self.sp_delay_error
+        self.postCal["sp_dopp_error"] = self.sp_doppler_error
+        self.postCal["sp_ngrx_delay_correction"] = self.sp_delay_error
+        self.postCal["sp_ngrx_dopp_correction"] = self.sp_doppler_error
 
-    def expand_sp_arrays(self):
+    def expand_sp_arrays(self, J_2, J):
         for key in [
             "sx_pos_x",
             "sx_pos_y",
@@ -160,10 +178,19 @@ class L1_file:
             "gps_tx_power_db_w",
             "gps_ant_gain_db_i",
         ]:
-            self.postCal[key] = expand_to_RHCP(self.postCal[key])
-        self.surface_type = expand_to_RHCP(self.surface_type)
-        self.dist_to_coast_km = expand_to_RHCP(self.dist_to_coast_km)
-        self.gps_boresight = expand_to_RHCP(self.gps_boresight)
+            self.postCal[key] = expand_to_RHCP(self.postCal[key], J_2, J)
+        self.surface_type = expand_to_RHCP(self.surface_type, J_2, J)
+        self.dist_to_coast_km = expand_to_RHCP(self.dist_to_coast_km, J_2, J)
+        self.gps_boresight = expand_to_RHCP(self.gps_boresight, J_2, J)
+
+    def expand_aeff_arrays(self, J_2, J):
+        self.peak_delay_row = expand_to_RHCP(self.peak_delay_row, J_2, J)
+        self.peak_doppler_col = expand_to_RHCP(self.peak_doppler_col, J_2, J)
+        self.sp_delay_row = expand_to_RHCP(self.sp_delay_row, J_2, J)
+        self.sp_doppler_col = expand_to_RHCP(self.sp_doppler_col, J_2, J)
+        self.sp_delay_error = expand_to_RHCP(self.sp_delay_error, J_2, J)
+        self.sp_doppler_error = expand_to_RHCP(self.sp_doppler_error, J_2, J)
+        self.zenith_code_phase = expand_to_RHCP(self.zenith_code_phase, J_2, J)
 
 
 def get_datatype(data_series, value=None):
