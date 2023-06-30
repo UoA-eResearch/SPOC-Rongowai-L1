@@ -14,7 +14,7 @@ LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
 LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
 
 
-def expand_to_RHCP(self, array, J_2, J):
+def expand_to_RHCP(array, J_2, J):
     array[:, J_2:J] = array["sx_pos_x"][:, 0:J_2]
     return array
 
