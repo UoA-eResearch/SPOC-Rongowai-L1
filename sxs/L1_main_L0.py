@@ -1,6 +1,5 @@
 # mike.laverick@auckland.ac.nz
 # L1_main_L0.py
-import math
 import warnings
 
 # warnings.simplefilter(action="ignore", category=FutureWarning)
