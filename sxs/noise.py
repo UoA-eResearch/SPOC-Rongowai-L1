@@ -235,7 +235,7 @@ def noise_floor(L0, L1):
             counts_RHCP1 = L1.ddm_power_counts[sec, ngrx_channel + L0.J_2, :, :]
 
             # Removed +1 due to Python 0-based indexing
-            sp_delay_row1 = np.floor(L1.sp_delay_row_LHCP[sec][ngrx_channel])  # + 1
+            sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel])  # + 1
             sp_doppler_col1 = np.floor(L1.sp_doppler_col[sec][ngrx_channel])  # + 1
 
             if (0 < sp_delay_row1 < 40) and (0 < sp_doppler_col1 < 5):
