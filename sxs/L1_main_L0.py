@@ -373,8 +373,19 @@ aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla)
 fresnel_calculations(L0, L1, rx_vel_x, rx_vel_y, rx_vel_z)
 
 # Quality Flags
-quality_flag_calculations(L0, L1)
-
+quality_flag_calculations(
+    L0,
+    L1,
+    rx_roll,
+    rx_pitch,
+    rx_yaw,
+    ant_temp_nadir,
+    add_range_to_sp,
+    rx_pos_lla,
+    rx_vel_x,
+    rx_vel_y,
+    rx_vel_z,
+)
 
 definition_file = "./dat/L1_Dict/L1_Dict_v2_1m.xlsx"
 
