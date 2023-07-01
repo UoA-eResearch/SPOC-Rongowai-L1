@@ -162,7 +162,6 @@ class L1_file:
 
         self.postCal["quality_flags1"] = np.full([*L0.shape_2d], np.nan)
 
-
     def add_to_postcal(self, L0):
         # quick hack for code variables that are saved with different dict names
         self.postCal["raw_counts"] = self.ddm_power_counts
@@ -227,7 +226,9 @@ class L1_file:
         self.sp_doppler_col = expand_to_RHCP(self.sp_doppler_col, J_2, J)
         self.sp_delay_error = expand_to_RHCP(self.sp_delay_error, J_2, J)
         self.sp_doppler_error = expand_to_RHCP(self.sp_doppler_error, J_2, J)
-        self.zenith_code_phase = expand_to_RHCP(self.zenith_code_phase, J_2, J)
+        self.postCal["zenith_code_phase"] = expand_to_RHCP(
+            self.postCal["zenith_code_phase"], J_2, J
+        )
 
 
 def get_datatype(data_series, value=None):
