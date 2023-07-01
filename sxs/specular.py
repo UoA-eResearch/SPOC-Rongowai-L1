@@ -8,7 +8,6 @@ import numpy as np
 import pymap3d as pm
 import pyproj
 from scipy import constants
-from scipy.interpolate import interp2d
 from timeit import default_timer as timer
 
 from utils import get_local_dem, get_surf_type2
@@ -799,3 +798,5 @@ def specular_calculations(
             f"******** start processing part 4A {sec} second data with {timer() - t0} ********"
         )
         print(f"*{tn}*")
+    # expand to RHCP channels
+    L1.expand_sp_arrays(L0.J_2, L0.J)

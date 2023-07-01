@@ -3,6 +3,7 @@ import math
 import numpy as np
 import pymap3d as pm
 from scipy import constants
+from timeit import default_timer as timer
 
 from calibration import db2power
 from projections import ecef2lla
@@ -141,54 +142,99 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     return fresnel_coeff, fresnel_axis, fresnel_orientation
 
 
-def coh_det(raw_counts, snr_db):
-    """
-    this function computes the coherency of an input raw-count ddm
-    Inputs
-    1)raw ddm measured in counts
-    2)SNR measured in decibels
-    Outputs
-    1)coherency ratio (CR)
-    2)coherency state (CS)
-    """
-    peak_counts = np.amax(raw_counts)
-    delay_peak, dopp_peak = np.unravel_index(raw_counts.argmax(), raw_counts.shape)
+def brcs_calculations(L0, L1):
+    # separate copol and xpol gain for using later
+    rx_gain_copol_LL = L1.sx_rx_gain_copol[:, :10]
+    rx_gain_copol_RR = L1.sx_rx_gain_copol[:, 10:20]
 
-    # thermal noise exclusion
-    # TODO: the threshold may need to be redefined
-    if not np.isnan(snr_db):
-        thre_coeff = 1.055 * math.exp(-0.193 * snr_db)
-        thre = thre_coeff * peak_counts  # noise exclusion threshold
+    rx_gain_xpol_RL = L1.sx_rx_gain_xpol[:, :10]
+    rx_gain_xpol_LR = L1.sx_rx_gain_xpol[:, 10:20]
 
-        raw_counts[raw_counts < thre] = 0
+    # Part 4B: BRCS/NBRCS, reflectivity, coherent status and fresnel zone
+    # BRCS, reflectivity
 
-    # deterimine DDMA range
-    delay_range = list(range(delay_peak - 1, delay_peak + 2))
-    delay_min = min(delay_range)
-    delay_max = max(delay_range)
-    dopp_range = list(range(dopp_peak - 1, dopp_peak + 2))
-    dopp_min = min(dopp_range)
-    dopp_max = max(dopp_range)
+    # TODO draw these from a config file, here and in other places
+    cable_loss_db_LHCP = 0.6600
+    cable_loss_db_RHCP = 0.5840
+    powloss_LHCP = db2power(cable_loss_db_LHCP)
+    powloss_RHCP = db2power(cable_loss_db_RHCP)
 
-    # determine if DDMA is within DDM, refine if needed
-    if delay_min < 1:
-        delay_range = [0, 1, 2]
-    elif delay_max > 38:
-        delay_range = [37, 38, 39]
+    t0 = timer()
+    for sec in range(L0.I):
+        for ngrx_channel in range(L0.J_2):
+            # compensate cable loss
+            power_analog_LHCP1 = L1.power_analog[sec, ngrx_channel, :, :] * powloss_LHCP
+            power_analog_RHCP1 = (
+                L1.power_analog[sec, ngrx_channel + L0.J_2, :, :] * powloss_RHCP
+            )
 
-    if dopp_min < 1:
-        dopp_range = [0, 1, 2]
-    elif dopp_max > 3:
-        dopp_range = [2, 3, 4]
+            R_tsx1 = L1.postCal["tx_to_sp_range"][sec][ngrx_channel]
+            R_rsx1 = L1.postCal["rx_to_sp_range"][sec][ngrx_channel]
+            rx_gain_dbi_1 = [
+                rx_gain_copol_LL[sec][ngrx_channel],
+                rx_gain_xpol_RL[sec][ngrx_channel],
+                rx_gain_xpol_LR[sec][ngrx_channel],
+                rx_gain_copol_RR[sec][ngrx_channel],
+            ]
+            gps_eirp1 = L1.postCal["static_gps_eirp"][sec][ngrx_channel]
 
-    C_in = np.sum(raw_counts[delay_range, :][:, dopp_range])  # summation of DDMA
-    C_out = np.sum(raw_counts) - C_in  # summation of DDM excluding DDMA
+            if not np.isnan(power_analog_LHCP1).all():
+                brcs_copol1, brcs_xpol1 = ddm_brcs2(
+                    power_analog_LHCP1,
+                    power_analog_RHCP1,
+                    gps_eirp1,
+                    rx_gain_dbi_1,
+                    R_tsx1,
+                    R_rsx1,
+                )
+                refl_copol1, refl_xpol1 = ddm_refl2(
+                    power_analog_LHCP1,
+                    power_analog_RHCP1,
+                    gps_eirp1,
+                    rx_gain_dbi_1,
+                    R_tsx1,
+                    R_rsx1,
+                )
 
-    CR = C_in / C_out  # coherency ratio
+                # reflectivity at SP
+                # ignore +1 as Python is 0-base not 1-base
+                sp_delay_row1 = np.floor(L1.sp_delay_row_LHCP[sec][ngrx_channel])  # + 1
+                sp_doppler_col1 = np.floor(L1.sp_doppler_col[sec][ngrx_channel])  # + 1
 
-    if CR >= 2:
-        CS = 1
-    else:  # CR < 2
-        CS = 0
+                if (0 < sp_delay_row1 < 40) and (0 < sp_doppler_col1 < 5):
+                    sp_refl_copol1 = refl_copol1[
+                        int(sp_delay_row1), int(sp_doppler_col1)
+                    ]
+                    sp_refl_xpol1 = refl_xpol1[int(sp_delay_row1), int(sp_doppler_col1)]
+                else:
+                    sp_refl_copol1 = np.nan
+                    sp_refl_xpol1 = np.nan
 
-    return CR, CS
+                refl_waveform_copol1 = np.sum(refl_copol1, axis=1)
+                norm_refl_waveform_copol1 = np.divide(
+                    refl_waveform_copol1, np.nanmax(refl_waveform_copol1)
+                ).reshape(40, -1)
+
+                refl_waveform_xpol1 = np.sum(refl_xpol1, axis=1)
+                norm_refl_waveform_xpol1 = np.divide(
+                    refl_waveform_xpol1, np.nanmax(refl_waveform_xpol1)
+                ).reshape(40, -1)
+
+                L1.postCal["brcs"][sec][ngrx_channel] = brcs_copol1
+                L1.postCal["brcs"][sec][ngrx_channel + L0.J_2] = brcs_xpol1
+
+                L1.postCal["surface_reflectivity"][sec][ngrx_channel] = refl_copol1
+                L1.postCal["surface_reflectivity"][sec][
+                    ngrx_channel + L0.J_2
+                ] = refl_xpol1
+
+                L1.sp_refl[sec][ngrx_channel] = sp_refl_copol1
+                L1.sp_refl[sec][ngrx_channel + L0.J_2] = sp_refl_xpol1
+
+                L1.postCal["norm_refl_waveform"][sec][
+                    ngrx_channel
+                ] = norm_refl_waveform_copol1
+                L1.postCal["norm_refl_waveform"][sec][
+                    ngrx_channel + L0.J_2
+                ] = norm_refl_waveform_xpol1
+    print(f"******** finish processing part 5 data with {timer() - t0}********")

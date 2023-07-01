@@ -180,35 +180,3 @@ def ddm_calibration(
             # 0-based index
             ddm_ant[sec][ngrx_channel] = ANZ_port1 + 1
             inst_gain[sec][ngrx_channel] = inst_gain1
-
-
-def get_quality_flag(quality_flag1):
-    quality_flag = (
-        2**25 * quality_flag1[0]
-        + 2**24 * quality_flag1[1]
-        + 2**23 * quality_flag1[2]
-        + 2**22 * quality_flag1[3]
-        + 2**21 * quality_flag1[4]
-        + 2**20 * quality_flag1[5]
-        + 2**19 * quality_flag1[6]
-        + 2**18 * quality_flag1[7]
-        + 2**17 * quality_flag1[8]
-        + 2**16 * quality_flag1[9]
-        + 2**15 * quality_flag1[10]
-        + 2**14 * quality_flag1[11]
-        + 2**13 * quality_flag1[12]
-        + 2**12 * quality_flag1[13]
-        + 2**11 * quality_flag1[14]
-        + 2**10 * quality_flag1[15]
-        + 2**9 * quality_flag1[16]
-        + 2**8 * quality_flag1[17]
-        + 2**7 * quality_flag1[18]
-        + 2**6 * quality_flag1[19]
-        + 2**5 * quality_flag1[20]
-        + 2**4 * quality_flag1[21]
-        + 2**3 * quality_flag1[22]
-        + 2**2 * quality_flag1[23]
-        + 2**1 * quality_flag1[24]
-        + 2**0 * quality_flag1[25]
-    )
-    return quality_flag

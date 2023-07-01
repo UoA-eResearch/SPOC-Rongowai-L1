@@ -136,7 +136,34 @@ class L1_file:
 
         self.postCal["zenith_code_phase"] = np.full([*L0.shape_2d], np.nan)
 
-    def add_to_postcal(self):
+        self.confidence_flag = np.full([*L0.shape_2d], np.nan)
+        self.snr_flag = np.full([*L0.shape_2d], np.nan)
+
+        self.postCal["ddm_snr"] = np.full([*L0.shape_2d], np.nan)
+
+        self.postCal["brcs"] = np.full([*L0.shape_4d], np.nan)
+        self.postCal["surface_reflectivity"] = np.full([*L0.shape_4d], np.nan)
+        self.postCal["norm_refl_waveform"] = np.full([*L0.shape_2d, 40, 1], np.nan)
+
+        self.sp_refl = np.full([*L0.shape_2d], np.nan)
+
+        self.A_eff = np.full([*L0.shape_4d], np.nan)
+        self.postCal["nbrcs_scatter_area"] = np.full([*L0.shape_2d], np.nan)
+
+        self.nbrcs = np.full([*L0.shape_2d], np.nan)
+        self.coherency_ratio = np.full([*L0.shape_2d], np.nan)
+        self.coherency_state = np.full([*L0.shape_2d], np.nan)
+
+        self.postCal["fresnel_coeff"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["fresnel_minor"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["fresnel_major"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["fresnel_orientation"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["nbrcs_cross_pol"] = np.full([*L0.shape_2d], np.nan)
+
+        self.postCal["quality_flags1"] = np.full([*L0.shape_2d], np.nan)
+
+
+    def add_to_postcal(self, L0):
         # quick hack for code variables that are saved with different dict names
         self.postCal["raw_counts"] = self.ddm_power_counts
         self.postCal["l1a_power_ddm"] = self.power_analog
@@ -153,6 +180,16 @@ class L1_file:
         self.postCal["sp_dopp_error"] = self.sp_doppler_error
         self.postCal["sp_ngrx_delay_correction"] = self.sp_delay_error
         self.postCal["sp_ngrx_dopp_correction"] = self.sp_doppler_error
+        self.postCal["ddm_snr_flag"] = self.snr_flag
+        self.postCal["sp_confidence_flag"] = self.confidence_flag
+        self.postCal["surface_reflectivity_peak"] = self.sp_refl
+        self.postCal["eff_scatter"] = self.A_eff
+        self.postCal["ddm_nbrcs"] = self.nbrcs
+        self.postCal["coherence_metric"] = self.coherency_ratio
+        self.postCal["coherence_state"] = self.coherency_state
+
+        # LNA noise figure is 3 dB according to the specification
+        self.postCal["lna_noise_figure"] = np.full([*L0.shape_2d], 3)
 
     def expand_sp_arrays(self, J_2, J):
         for key in [
@@ -183,7 +220,7 @@ class L1_file:
         self.dist_to_coast_km = expand_to_RHCP(self.dist_to_coast_km, J_2, J)
         self.gps_boresight = expand_to_RHCP(self.gps_boresight, J_2, J)
 
-    def expand_aeff_arrays(self, J_2, J):
+    def expand_noise_arrays(self, J_2, J):
         self.peak_delay_row = expand_to_RHCP(self.peak_delay_row, J_2, J)
         self.peak_doppler_col = expand_to_RHCP(self.peak_doppler_col, J_2, J)
         self.sp_delay_row = expand_to_RHCP(self.sp_delay_row, J_2, J)
