@@ -159,6 +159,9 @@ def brcs_calculations(L0, L1):
     powloss_LHCP = db2power(cable_loss_db_LHCP)
     powloss_RHCP = db2power(cable_loss_db_RHCP)
 
+    # single noise floor from valid DDMs
+    sp_delay_row_LHCP = L1.sp_delay_row[:, :10]  # reference to LHCP delay row
+
     t0 = timer()
     for sec in range(L0.I):
         for ngrx_channel in range(L0.J_2):
@@ -198,7 +201,7 @@ def brcs_calculations(L0, L1):
 
                 # reflectivity at SP
                 # ignore +1 as Python is 0-base not 1-base
-                sp_delay_row1 = np.floor(L1.sp_delay_row_LHCP[sec][ngrx_channel])  # + 1
+                sp_delay_row1 = np.floor(sp_delay_row_LHCP[sec][ngrx_channel])  # + 1
                 sp_doppler_col1 = np.floor(L1.sp_doppler_col[sec][ngrx_channel])  # + 1
 
                 if (0 < sp_delay_row1 < 40) and (0 < sp_doppler_col1 < 5):
