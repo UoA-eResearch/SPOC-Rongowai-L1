@@ -387,6 +387,6 @@ quality_flag_calculations(
 )
 
 definition_file = "./dat/L1_Dict/L1_Dict_v2_1m.xlsx"
-
+L1.add_to_postcal(L0)
 # to netcdf
 write_netcdf(L1.postCal, definition_file, output_file)
