@@ -28,7 +28,7 @@ from load_files import (
 from projections import ecef2lla
 from specular import specular_calculations
 from utils import interp_ddm
-from write_files import L1_file, write_netcdf
+from output import L1_file, write_netcdf
 
 ### ---------------------- Prelaunch 1: Load L0 data
 
