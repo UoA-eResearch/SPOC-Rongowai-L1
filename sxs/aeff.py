@@ -225,9 +225,9 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
             az_angle1 = math.degrees(math.acos(np.dot(unit_rx_vel1, unit_tx_vel1)))
 
             sx_pos_xyz1 = [
-                L1.postCal["sx_pos_x"][sec][ngrx_channel],
-                L1.postCal["sx_pos_y"][sec][ngrx_channel],
-                L1.postCal["sx_pos_z"][sec][ngrx_channel],
+                L1.postCal["sp_pos_x"][sec][ngrx_channel],
+                L1.postCal["sp_pos_y"][sec][ngrx_channel],
+                L1.postCal["sp_pos_z"][sec][ngrx_channel],
             ]
             sx_lla1 = ecef2lla.transform(*sx_pos_xyz1, radians=False)
 
@@ -235,7 +235,7 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
             rx_alt_corrected1 = rx_alt1 - sx_lla1[2]
 
             # % 3rd input of A_eff
-            inc_angle1 = L1.postCal["sx_inc_angle"][sec][ngrx_channel]
+            inc_angle1 = L1.postCal["sp_inc_angle"][sec][ngrx_channel]
 
             brcs_copol1 = L1.postCal["brcs"][sec][ngrx_channel]
             brcs_xpol1 = L1.postCal["brcs"][sec][ngrx_channel + L0.J_2]

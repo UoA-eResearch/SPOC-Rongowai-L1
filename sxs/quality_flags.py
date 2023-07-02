@@ -162,7 +162,7 @@ def quality_flag_calculations(
                 quality_flag1_1[17] = 1
 
             # flag 18
-            sx_pos_x1 = L1.postCal["sx_pos_x"][sec][ngrx_channel]
+            sx_pos_x1 = L1.postCal["sp_pos_x"][sec][ngrx_channel]
             if np.isnan(sx_pos_x1) and (not np.isnan(prn_code1)):
                 quality_flag1_1[18] = 1
 

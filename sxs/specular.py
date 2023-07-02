@@ -729,22 +729,22 @@ def specular_calculations(
                     sx_vel_xyz1 = np.array(sx_pos_xyz_dt) - np.array(sx_pos_xyz1)
 
                     # save sx values to variables
-                    L1.postCal["sx_pos_x"][sec][ngrx_channel] = sx_pos_xyz1[0]
-                    L1.postCal["sx_pos_y"][sec][ngrx_channel] = sx_pos_xyz1[1]
-                    L1.postCal["sx_pos_z"][sec][ngrx_channel] = sx_pos_xyz1[2]
+                    L1.postCal["sp_pos_x"][sec][ngrx_channel] = sx_pos_xyz1[0]
+                    L1.postCal["sp_pos_y"][sec][ngrx_channel] = sx_pos_xyz1[1]
+                    L1.postCal["sp_pos_z"][sec][ngrx_channel] = sx_pos_xyz1[2]
 
-                    L1.postCal["sx_lat"][sec][ngrx_channel] = sx_pos_lla1[0]
-                    L1.postCal["sx_lon"][sec][ngrx_channel] = sx_pos_lla1[1]
-                    L1.postCal["sx_alt"][sec][ngrx_channel] = sx_pos_lla1[2]
+                    L1.postCal["sp_lat"][sec][ngrx_channel] = sx_pos_lla1[0]
+                    L1.postCal["sp_lon"][sec][ngrx_channel] = sx_pos_lla1[1]
+                    L1.postCal["sp_alt"][sec][ngrx_channel] = sx_pos_lla1[2]
 
-                    L1.postCal["sx_vel_x"][sec][ngrx_channel] = sx_vel_xyz1[0]
-                    L1.postCal["sx_vel_y"][sec][ngrx_channel] = sx_vel_xyz1[1]
-                    L1.postCal["sx_vel_z"][sec][ngrx_channel] = sx_vel_xyz1[2]
+                    L1.postCal["sp_vel_x"][sec][ngrx_channel] = sx_vel_xyz1[0]
+                    L1.postCal["sp_vel_y"][sec][ngrx_channel] = sx_vel_xyz1[1]
+                    L1.postCal["sp_vel_z"][sec][ngrx_channel] = sx_vel_xyz1[2]
                     L1.surface_type[sec][ngrx_channel] = surface_type1
                     L1.dist_to_coast_km[sec][ngrx_channel] = dist_to_coast_km1
 
-                    L1.postCal["sx_inc_angle"][sec][ngrx_channel] = inc_angle_deg1
-                    L1.postCal["sx_d_snell_angle"][sec][ngrx_channel] = d_snell_deg1
+                    L1.postCal["sp_inc_angle"][sec][ngrx_channel] = inc_angle_deg1
+                    L1.postCal["sp_d_snell_angle"][sec][ngrx_channel] = d_snell_deg1
 
                     # Part 4.2: SP-related variables - 1
                     # this part derives tx/rx gains, ranges and other related variables
@@ -768,10 +768,10 @@ def specular_calculations(
                     sx_rx_gain_RHCP1 = get_sx_rx_gain(sx_angle_ant1, inp.RHCP_pattern)
 
                     # save to variables
-                    L1.postCal["sx_theta_body"][sec, ngrx_channel] = sx_angle_body1[0]
-                    L1.postCal["sx_az_body"][sec, ngrx_channel] = sx_angle_body1[1]
-                    L1.postCal["sx_theta_enu"][sec, ngrx_channel] = sx_angle_enu1[0]
-                    L1.postCal["sx_az_enu"][sec, ngrx_channel] = sx_angle_enu1[1]
+                    L1.postCal["sp_theta_body"][sec, ngrx_channel] = sx_angle_body1[0]
+                    L1.postCal["sp_az_body"][sec, ngrx_channel] = sx_angle_body1[1]
+                    L1.postCal["sp_theta_enu"][sec, ngrx_channel] = sx_angle_enu1[0]
+                    L1.postCal["sp_az_enu"][sec, ngrx_channel] = sx_angle_enu1[1]
 
                     L1.gps_boresight[sec, ngrx_channel] = theta_gps1
 

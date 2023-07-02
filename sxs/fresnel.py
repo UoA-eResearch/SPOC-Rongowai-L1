@@ -17,12 +17,12 @@ def fresnel_calculations(L0, L1, rx_pos_x, rx_pos_y, rx_pos_z):
             ]
             rx_pos_xyz1 = [rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]]
             sx_pos_xyz1 = [
-                L1.postCal["sx_pos_x"][sec][ngrx_channel],
-                L1.postCal["sx_pos_y"][sec][ngrx_channel],
-                L1.postCal["sx_pos_z"][sec][ngrx_channel],
+                L1.postCal["sp_pos_x"][sec][ngrx_channel],
+                L1.postCal["sp_pos_y"][sec][ngrx_channel],
+                L1.postCal["sp_pos_z"][sec][ngrx_channel],
             ]
 
-            inc_angle1 = L1.postCal["sx_inc_angle"][sec][ngrx_channel]
+            inc_angle1 = L1.postCal["sp_inc_angle"][sec][ngrx_channel]
             dist_to_coast1 = L1.dist_to_coast_km[sec][ngrx_channel]
             ddm_ant1 = L1.postCal["ddm_ant"][sec][ngrx_channel]
 

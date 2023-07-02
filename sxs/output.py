@@ -92,25 +92,25 @@ class L1_file:
         self.postCal["ddm_ant"] = np.full([*L0.shape_2d], np.nan)  # 0-based
         self.postCal["inst_gain"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["LOS_flag"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_pos_x"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_pos_y"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_pos_z"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_lat"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_lon"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_alt"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_vel_x"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_vel_y"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_vel_z"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_pos_x"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_pos_y"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_pos_z"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_lat"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_lon"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_alt"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_vel_x"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_vel_y"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_vel_z"] = np.full([*L0.shape_2d], np.nan)
 
         self.dist_to_coast_km = np.full([*L0.shape_2d], np.nan)
         self.surface_type = np.full([*L0.shape_2d], np.nan)
 
-        self.postCal["sx_inc_angle"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_d_snell_angle"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_theta_body"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_az_body"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_theta_enu"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["sx_az_enu"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_inc_angle"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_d_snell_angle"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_theta_body"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_az_body"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_theta_enu"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["sp_az_enu"] = np.full([*L0.shape_2d], np.nan)
 
         self.gps_boresight = np.full([*L0.shape_2d], np.nan)
 
@@ -192,22 +192,22 @@ class L1_file:
 
     def expand_sp_arrays(self, J_2, J):
         for key in [
-            "sx_pos_x",
-            "sx_pos_y",
-            "sx_pos_z",
-            "sx_lat",
-            "sx_lon",
-            "sx_alt",
-            "sx_vel_x",
-            "sx_vel_y",
-            "sx_vel_z",
+            "sp_pos_x",
+            "sp_pos_y",
+            "sp_pos_z",
+            "sp_lat",
+            "sp_lon",
+            "sp_alt",
+            "sp_vel_x",
+            "sp_vel_y",
+            "sp_vel_z",
             "LOS_flag",
-            "sx_inc_angle",
-            "sx_d_snell_angle",
-            "sx_theta_body",
-            "sx_az_body",
-            "sx_theta_enu",
-            "sx_az_enu",
+            "sp_inc_angle",
+            "sp_d_snell_angle",
+            "sp_theta_body",
+            "sp_az_body",
+            "sp_theta_enu",
+            "sp_az_enu",
             "rx_to_sp_range",
             "tx_to_sp_range",
             "static_gps_eirp",

@@ -117,9 +117,9 @@ def noise_floor_prep(
             # retrieve sx-related parameters
             sx_pos_xyz1 = np.array(
                 [
-                    L1.postCal["sx_pos_x"][sec][ngrx_channel],
-                    L1.postCal["sx_pos_y"][sec][ngrx_channel],
-                    L1.postCal["sx_pos_z"][sec][ngrx_channel],
+                    L1.postCal["sp_pos_x"][sec][ngrx_channel],
+                    L1.postCal["sp_pos_y"][sec][ngrx_channel],
+                    L1.postCal["sp_pos_z"][sec][ngrx_channel],
                 ]
             )
 
@@ -268,7 +268,7 @@ def noise_floor(L0, L1):
                 sx_delay_error1 = abs(L1.sp_delay_error[sec][ngrx_channel])
                 sx_doppler_error1 = abs(L1.sp_doppler_error[sec][ngrx_channel])
                 sx_d_snell_angle1 = abs(
-                    L1.postCal["sx_d_snell_angle"][sec][ngrx_channel]
+                    L1.postCal["sp_d_snell_angle"][sec][ngrx_channel]
                 )
 
                 if not np.isnan(L1.postCal["tx_pos_x"][sec][ngrx_channel]):

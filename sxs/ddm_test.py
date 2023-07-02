@@ -69,25 +69,25 @@ skip_list = [
     "gps_tx_power_db_w",
 ]
 
-for var in py_L1.variables:
-    print(var)
-    if var in skip_list:
-        continue
+for var in mat_L1.variables:
+    # print(var)
+    # if var in skip_list:
+    #    continue
     # print("should be fine...")
-    if var == "sample":
-        var2 = "sample_index"
+    if var == "sample_index":
+        var2 = "sample"
     else:
         var2 = var
     if var == "norm_refl_waveform":
         continue  # shape differences
     print(
         var,
-        colored(mat_L1[var2].dtype, "green"),
-        colored(py_L1[var].dtype, "blue"),
+        colored(mat_L1[var].dtype, "green"),
+        colored(py_L1[var2].dtype, "blue"),
     )
     # print(colored(mat_L1[var2][:], "green"))
     # print(colored(py_L1[var][:], "blue"))
-    print(colored(py_L1[var][:] - mat_L1[var2][:], "yellow"))
+    # print(colored(py_L1[var][:] - mat_L1[var2][:], "yellow"))
     """mean = np.nanmean(
         np.divide(np.abs(mat_L1[var2][:] - py_L1[var][:]), mat_L1[var2][:])
     )
@@ -101,7 +101,7 @@ for var in py_L1.variables:
     print(f"min={mmin}, mean={mean}, max={mmax}")"""
 
     if np.array_equal(
-        np.array(mat_L1[var2][:]), np.array(py_L1[var][:]), equal_nan=True
+        np.array(mat_L1[var][:]), np.array(py_L1[var2][:]), equal_nan=True
     ):
         print(colored("yay", "yellow"))
     else:
