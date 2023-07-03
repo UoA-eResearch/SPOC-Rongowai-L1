@@ -8,7 +8,6 @@ import numpy as np
 import pymap3d as pm
 import pyproj
 from scipy import constants
-from timeit import default_timer as timer
 
 from utils import get_local_dem, get_surf_type2
 from projections import ecef2lla, lla2ecef
@@ -630,8 +629,6 @@ def specular_calculations(
 ):
     # iterate over each second of flight
     for sec in range(L0.I):
-        t0 = timer()
-        tn = 0
         # retrieve rx positions, velocities and attitdues
         # bundle up craft pos/vel/attitude data into per sec, and rx1
         rx_pos_xyz1 = np.array([rx_pos_x[sec], rx_pos_y[sec], rx_pos_z[sec]])
@@ -742,7 +739,6 @@ def specular_calculations(
                     L1.postCal["sp_inc_angle"][sec][ngrx_channel] = inc_angle_deg1
                     L1.postCal["sp_d_snell_angle"][sec][ngrx_channel] = d_snell_deg1
 
-                    tn1 = timer()
                     # Part 4.2: SP-related variables - 1
                     # this part derives tx/rx gains, ranges and other related variables
                     # derive SP related geo-parameters, including angles in various frames, ranges and antenna gain/GPS EIRP
@@ -791,11 +787,6 @@ def specular_calculations(
                     L1.sx_rx_gain_xpol[sec, ngrx_channel] = sx_rx_gain_LHCP1[1]
                     # RHCP channel rx gain
                     L1.sx_rx_gain_xpol[sec, ngrx_channel + L0.J_2] = sx_rx_gain_RHCP1[0]
-                    tn += timer() - tn1
 
-        print(
-            f"******** start processing part 4A {sec} second data with {timer() - t0} ********"
-        )
-        print(f"*{tn}*")
     # expand to RHCP channels
     L1.expand_sp_arrays(L0.J_2, L0.J)

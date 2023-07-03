@@ -397,18 +397,18 @@ def write_netcdf(dict_in, definition_file, output_file):
         ncfile.createDimension("doppler", None)
 
         for k, v in dict_in.items():
-            print("writing: ", k)
+            # print("writing: ", k)
             ds_k = df[df["Name"] == k]
 
             if ds_k.empty:
-                print(
-                    f"Warning: variable {k} not found in definition file, skip this variable."
-                )
+                # print(
+                #    f"Warning: variable {k} not found in definition file, skip this variable."
+                # )
                 continue
             elif len(ds_k) > 1:
-                print(
-                    f"Warning: find multiple variable {k} definition in definition file, skip this variable."
-                )
+                # print(
+                #    f"Warning: find multiple variable {k} definition in definition file, skip this variable."
+                # )
                 continue
 
             # if ds_k["Data_type"].str.contains("attribute").any():  # attribute
