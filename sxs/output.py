@@ -14,11 +14,11 @@ class L1_file:
     Basic class to hold variables from the input L0 file
     """
 
-    def __init__(self, filename, config_file, L0, inp):
+    def __init__(self, filename, settings, L0, inp):
         self.postCal = {}
         self.filename = filename
         # load L1 file info from config file: versions etc
-        self.load_from_config(config_file)
+        self.load_from_config(settings)
         # prep L0 variables that will be written to L1
         self.data_from_L0(L0)
         # initialise lots of empty arrays for later population
@@ -26,28 +26,30 @@ class L1_file:
         # interpolate several aircraft variables onto fixed grid
         self.interpolate_L0(L0, inp)
 
-    def load_from_config(self, config_file):
+    def load_from_config(self, settings):
         # for now just hardcode stuff here
         # TODO read from config
-        self.postCal["aircraft_reg"] = "ZK-NFA"  # default value
-        self.postCal["ddm_source"] = 2  # 1 = GPS signal simulator, 2 = aircraft
-        self.postCal["ddm_time_type_selector"] = 1  # 1 = middle of DDM sampling period
-        self.postCal["dem_source"] = "SRTM30"
+        self.postCal["aircraft_reg"] = settings["AIRCRAFT_REG"]
+        self.postCal["ddm_source"] = settings["DDM_SOURCE"]
+        self.postCal["ddm_time_type_selector"] = settings["DDM_TIME_TYPE_SELECTOR"]
+        self.postCal["dem_source"] = settings["DEM_SOURCE"]
         # write algorithm and LUT versions
-        self.postCal["l1_algorithm_version"] = "2.0"
-        self.postCal["l1_data_version"] = "2.0"
-        self.postCal["l1a_sig_LUT_version"] = "1"
-        self.postCal["l1a_noise_LUT_version"] = "1"
-        self.postCal["A_LUT_version"] = "1"
-        self.postCal["ngrx_port_mapping_version"] = "1"
-        self.postCal["nadir_ant_data_version"] = "1"
-        self.postCal["zenith_ant_data_version"] = "1"
-        self.postCal["prn_sv_maps_version"] = "1"
-        self.postCal["gps_eirp_param_version"] = "7"
-        self.postCal["land_mask_version"] = "1"
-        self.postCal["surface_type_version"] = "1"
-        self.postCal["mean_sea_surface_version"] = "1"
-        self.postCal["per_bin_ant_version"] = "1"
+        self.postCal["l1_algorithm_version"] = settings["L1_ALGORITHM_VERSION"]
+        self.postCal["l1_data_version"] = settings["L1_DATA_VERSION"]
+        self.postCal["l1a_sig_LUT_version"] = settings["L1A_SIG_LUT_VERSION"]
+        self.postCal["l1a_noise_LUT_version"] = settings["L1A_NOISE_LUT_VERSION"]
+        self.postCal["A_LUT_version"] = settings["A_LUT_VERSION"]
+        self.postCal["ngrx_port_mapping_version"] = settings[
+            "NGRX_PORT_MAPPING_VERSION"
+        ]
+        self.postCal["nadir_ant_data_version"] = settings["NADIR_ANT_DATA_VERSION"]
+        self.postCal["zenith_ant_data_version"] = settings["ZENITH_ANT_DATA_VERSION"]
+        self.postCal["prn_sv_maps_version"] = settings["PRN_SV_MAPS_VERSION"]
+        self.postCal["gps_eirp_param_version"] = settings["GPS_EIRP_PARAM_VERSION"]
+        self.postCal["land_mask_version"] = settings["LAND_MASK_VERSION"]
+        self.postCal["surface_type_version"] = settings["SURFACE_TYPE_VERSION"]
+        self.postCal["mean_sea_surface_version"] = settings["MEAN_SEA_SURFACE_VERSION"]
+        self.postCal["per_bin_ant_version"] = settings["PER_BIN_ANT_VERSION"]
 
     def data_from_L0(self, L0):
         # initialise variables that are diretly taken from L0 file
@@ -444,6 +446,3 @@ def write_netcdf(dict_in, definition_file, output_file):
                     var_k[:, :, :] = np.squeeze(v, axis=3)
                 else:
                     raise Exception(f"variable {k} has unsupported dimensions")
-
-        # print the Dataset object to see what we've got
-        print(ncfile)

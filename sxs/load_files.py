@@ -190,6 +190,9 @@ class input_files:
             "RHCP": load_antenna_pattern(rng_filenames[3]),
         }
         self.rx_alt_bins, self.A_phy_LUT_interp = load_A_phy_LUT(A_phy_LUT_path)
+        # rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all = load_A_phy_LUT(
+        #    A_phy_LUT_path
+        # )
 
 
 def load_netcdf(netcdf_variable):

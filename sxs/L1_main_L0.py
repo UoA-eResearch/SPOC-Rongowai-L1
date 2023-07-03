@@ -1,9 +1,11 @@
 # mike.laverick@auckland.ac.nz
 # L1_main_L0.py
+import argparse
+from pathlib import Path
+import os
 import warnings
 
 # warnings.simplefilter(action="ignore", category=FutureWarning)
-from pathlib import Path
 
 from aeff import aeff_and_nbrcs
 from brcs import brcs_calculations
@@ -16,185 +18,281 @@ from quality_flags import quality_flag_calculations
 from specular import specular_calculations
 from output import L1_file, write_netcdf
 
-### ---------------------- Prelaunch 1: Load L0 data
 
-# specify input L0 netcdf file
-raw_data_path = Path().absolute().joinpath(Path("./dat/raw/"))
-L0_filename = raw_data_path.joinpath(Path("20221103-121416_NZNV-NZCH.nc"))
-# L0_filename = Path("20230404-065056_NZTU-NZWN.nc")
-# L0_dataset = nc.Dataset(raw_data_path.joinpath(L0_filename))
-L0 = L0_file(L0_filename)
+def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
+    # Prelaunch 1: Load L0 data
+    L0 = L0_file(L0_filename)
 
-### ---------------------- Prelaunch 1.5: Filter valid timestampes
+    # Prelaunch 1.5: Filter valid timestampes
+    # identify and compensate the value equal to 0 (randomly happens)
+    assert not (
+        L0.pvt_gps_week == 0
+    ).any(), "pvt_gps_week contains 0, need to compensate."
+    # the below is to process when ddm-related and rx-related variables do not
+    # have the same length, which happens for some of the L0 products
+    assert (
+        L0.pvt_gps_week.shape[0] == L0.I
+    ), "pvt_gps_week and transmitter_id do not have the same length."
+    #
+    # TODO: Additional processing if ddm- and rx- related varaibles aren't the same length
+    #
 
-# identify and compensate the value equal to 0 (randomly happens)
-assert not (L0.pvt_gps_week == 0).any(), "pvt_gps_week contains 0, need to compensate."
+    # Part 1: General processing
+    # This part derives global constants, timestamps, and all the other
+    # parameters at ddm timestamps
+    L1 = L1_file(L1_filename, settings, L0, inp)
 
-# the below is to process when ddm-related and rx-related variables do not
-# have the same length, which happens for some of the L0 products
-assert (
-    L0.pvt_gps_week.shape[0] == L0.I
-), "pvt_gps_week and transmitter_id do not have the same length."
-#
-# TODO: Additional processing if ddm- and rx- related varaibles aren't the same length
-#
+    # Part 2: Derive TX related variables
+    # This part derives TX positions and velocities, maps between PRN and SVN,
+    # and gets track ID
+    calculate_satellite_orbits(L0, L1, inp)
 
-integration_duration = L0.coherent_duration * L0.non_coherent_integrations * 1000
+    # Part 3: L1a calibration
+    # this part converts from raw counts to signal power in watts and complete
+    # L1a calibration
+    ddm_calibration(
+        inp,
+        L0.std_dev_rf1,
+        L0.std_dev_rf2,
+        L0.std_dev_rf3,
+        L0.J,
+        L1.postCal["prn_code"],
+        L0.raw_counts,
+        L0.rf_source,
+        L0.first_scale_factor,
+        L1.ddm_power_counts,
+        L1.power_analog,
+        L1.postCal["ddm_ant"],
+        L1.postCal["inst_gain"],
+    )
 
+    # Part 4A: SP solver and geometries
+    specular_calculations(
+        L0,
+        L1,
+        inp,
+        L1.rx_pos_x,
+        L1.rx_pos_y,
+        L1.rx_pos_z,
+        L1.rx_vel_x,
+        L1.rx_vel_y,
+        L1.rx_vel_z,
+        L1.rx_roll,
+        L1.rx_pitch,
+    )
 
-### ---------------------- Prelaunch 2 - define external data paths and filenames
+    # Part 3B and 3C: noise floor, SNR, confidence flag of the SP solved
+    noise_floor_prep(
+        L0,
+        L1,
+        L1.postCal["add_range_to_sp"],
+        L1.rx_pos_x,
+        L1.rx_pos_y,
+        L1.rx_pos_z,
+        L1.rx_vel_x,
+        L1.rx_vel_y,
+        L1.rx_vel_z,
+    )
+    noise_floor(L0, L1)
 
-# load L1a calibration tables
-L1a_path = Path().absolute().joinpath(Path("./dat/L1a_cal/"))
-L1a_cal_ddm_counts_db_filename = L1a_path.joinpath("L1A_cal_ddm_counts_dB.dat")
-L1a_cal_ddm_power_dbm_filename = L1a_path.joinpath("L1A_cal_ddm_power_dBm.dat")
+    # Part 5: Copol and xpol BRCS, reflectivity, peak reflectivity
+    brcs_calculations(L0, L1)
 
-# load SRTM_30 DEM
-dem_path = Path().absolute().joinpath(Path("./dat/dem/"))
-dem_filename = dem_path.joinpath(Path("nzsrtm_30_v1.tif"))
+    # Part 6: NBRCS and other related parameters
+    aeff_and_nbrcs(L0, L1, inp, L1.rx_vel_x, L1.rx_vel_y, L1.rx_vel_z, L1.rx_pos_lla)
 
-# load DTU10 model
-dtu_path = Path().absolute().joinpath(Path("./dat/dtu/"))
-dtu_filename = dtu_path.joinpath(Path("dtu10_v1.dat"))
+    # Part 7: fresnel dimensions and cross Pol
+    fresnel_calculations(L0, L1, L1.rx_vel_x, L1.rx_vel_y, L1.rx_vel_z)
 
-# load ocean/land (distance to coast) mask
-landmask_path = Path().absolute().joinpath(Path("./dat/cst/"))
-landmask_filename = landmask_path.joinpath(Path("dist_to_coast_nz_v1.dat"))
+    # Quality Flags
+    quality_flag_calculations(
+        L0,
+        L1,
+        L1.rx_roll,
+        L1.rx_pitch,
+        L1.rx_yaw,
+        L1.postCal["ant_temp_nadir"],
+        L1.postCal["add_range_to_sp"],
+        L1.rx_pos_lla,
+        L1.rx_vel_x,
+        L1.rx_vel_y,
+        L1.rx_vel_z,
+    )
 
-# load landcover mask
-lcv_path = Path().absolute().joinpath(Path("./dat/lcv/"))
-lcv_filename = lcv_path.joinpath(Path("lcv.png"))
-
-# process inland water mask
-pek_path = Path().absolute().joinpath(Path("./dat/pek/"))
-
-water_mask_paths = ["160E_40S", "170E_30S", "170E_40S"]
-
-# load PRN-SV and SV-EIRP(static) LUT
-gps_path = Path().absolute().joinpath(Path("./dat/gps/"))
-SV_PRN_filename = gps_path.joinpath(Path("PRN_SV_LUT_v1.dat"))
-SV_eirp_filename = gps_path.joinpath(Path("GPS_SV_EIRP_Params_v7.dat"))
-
-
-# load and process nadir NGRx-GNSS antenna patterns
-rng_path = Path().absolute().joinpath(Path("./dat/rng/"))
-LHCP_L_filename = rng_path.joinpath(Path("GNSS_LHCP_L_gain_db_i_v1.dat"))
-LHCP_R_filename = rng_path.joinpath(Path("GNSS_LHCP_R_gain_db_i_v1.dat"))
-RHCP_L_filename = rng_path.joinpath(Path("GNSS_RHCP_L_gain_db_i_v1.dat"))
-RHCP_R_filename = rng_path.joinpath(Path("GNSS_RHCP_R_gain_db_i_v1.dat"))
-rng_filenames = [LHCP_L_filename, LHCP_R_filename, RHCP_L_filename, RHCP_R_filename]
-
-
-# scattering area LUT
-A_phy_LUT_path = "./dat/A_phy_LUT/A_phy_LUT.dat"
-# rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all = load_A_phy_LUT(
-#    A_phy_LUT_path
-# )
-
-inp = input_files(
-    L1a_cal_ddm_counts_db_filename,
-    L1a_cal_ddm_power_dbm_filename,
-    dem_filename,
-    dtu_filename,
-    landmask_filename,
-    lcv_filename,
-    water_mask_paths,
-    pek_path,
-    SV_PRN_filename,
-    SV_eirp_filename,
-    rng_filenames,
-    A_phy_LUT_path,
-)
-
-
-### ---------------------- Part 1: General processing
-# This part derives global constants, timestamps, and all the other
-# parameters at ddm timestamps
-
-# write global variables
-output_file = "./out/mike_test.nc"
-L1 = L1_file(output_file, "config_file", L0, inp)
-# part 1 ends
-
-### ---------------------- Part 2: Derive TX related variables
-# This part derives TX positions and velocities, maps between PRN and SVN,
-# and gets track ID
-
-calculate_satellite_orbits(L0, L1, inp)
-
-# Part 3: L1a calibration
-# this part converts from raw counts to signal power in watts and complete
-# L1a calibration
-ddm_calibration(
-    L0.std_dev_rf1,
-    L0.std_dev_rf2,
-    L0.std_dev_rf3,
-    L0.J,
-    L1.postCal["prn_code"],
-    L0.raw_counts,
-    L0.rf_source,
-    L0.first_scale_factor,
-    L1.ddm_power_counts,
-    L1.power_analog,
-    L1.postCal["ddm_ant"],
-    L1.postCal["inst_gain"],
-)
+    # write to netcdf
+    L1.add_to_postcal(L0)
+    write_netcdf(L1.postCal, L1_DICT, L1.filename)
 
 
-# Part 4A: SP solver and geometries
-specular_calculations(
-    L0,
-    L1,
-    inp,
-    L1.rx_pos_x,
-    L1.rx_pos_y,
-    L1.rx_pos_z,
-    L1.rx_vel_x,
-    L1.rx_vel_y,
-    L1.rx_vel_z,
-    L1.rx_roll,
-    L1.rx_pitch,
-)
+if __name__ == "__main__":
+    argparser = argparse.ArgumentParser(
+        description="Process L1 science file from L0 netCDF."
+    )
+    argparser.add_argument(
+        "--conf-file",
+        type=str,
+        help="path for configuration file that specifies I/O and version settings. Default='../config'",
+    )
+    args = argparser.parse_args()
 
-# Part 3B and 3C: noise floor, SNR, confidence flag of the SP solved
-noise_floor_prep(
-    L0,
-    L1,
-    L1.postCal["add_range_to_sp"],
-    L1.rx_pos_x,
-    L1.rx_pos_y,
-    L1.rx_pos_z,
-    L1.rx_vel_x,
-    L1.rx_vel_y,
-    L1.rx_vel_z,
-)
-noise_floor(L0, L1)
+    argparser.add_argument(
+        "--input-L0-dir",
+        type=str,
+        help="User-specified L0 input file directory to override conf file.",
+    )
+    args = argparser.parse_args()
 
-# Part 5: Copol and xpol BRCS, reflectivity, peak reflectivity
-brcs_calculations(L0, L1)
+    argparser.add_argument(
+        "--output-dir",
+        type=str,
+        help="User-specified L1 output file directory to override config file.",
+    )
+    args = argparser.parse_args()
 
-# Part 6: NBRCS and other related parameters
-aeff_and_nbrcs(L0, L1, inp, L1.rx_vel_x, L1.rx_vel_y, L1.rx_vel_z, L1.rx_pos_lla)
+    if args.input_L0_dir is not None:
+        if not os.path.isdir(args.input_L0_dir):
+            argparser.error(
+                "--input-L0-dir error: "
+                + str(args.input_L0_dir)
+                + " not a valid directory"
+            )
 
-# Part 7: fresnel dimensions and cross Pol
-fresnel_calculations(L0, L1, L1.rx_vel_x, L1.rx_vel_y, L1.rx_vel_z)
+    if args.output_dir is not None:
+        if not os.path.isdir(args.output_dir):
+            argparser.error(
+                "--output-dir error: " + str(args.output_dir) + " not a valid directory"
+            )
 
-# Quality Flags
-quality_flag_calculations(
-    L0,
-    L1,
-    L1.rx_roll,
-    L1.rx_pitch,
-    L1.rx_yaw,
-    L1.postCal["ant_temp_nadir"],
-    L1.postCal["add_range_to_sp"],
-    L1.rx_pos_lla,
-    L1.rx_vel_x,
-    L1.rx_vel_y,
-    L1.rx_vel_z,
-)
+    this_dir = os.path.dirname(os.path.realpath(__file__))
+    if args.conf_file is not None:
+        if not os.path.isfile(args.conf_file):
+            argparser.error(
+                "--output-dir error: " + str(args.output_dir) + " not a valid file"
+            )
+        conf_file = Path(args.output_dir)
+    else:
+        conf_file = Path(this_dir + "/../config")
 
-definition_file = "./dat/L1_Dict/L1_Dict_v2_1m.xlsx"
-L1.add_to_postcal(L0)
-# to netcdf
-write_netcdf(L1.postCal, definition_file, output_file)
+    settings = {
+        "L1_L0_INPUT": "",
+        "L1_L1_OUTPUT": "",
+        "L1_A_PHY_LUT": "",
+        "L1_LANDMASK": "",
+        "L1_DEM": "",
+        "L1_DTU": "",
+        "L1_SV_PRN": "",
+        "L1_SV_eirp": "",
+        "L1_DICT": "",
+        "L1a_CAL_COUNTS": "",
+        "L1a_CAL_POWER": "",
+        "L1_LANDCOVER": "",
+        "L1_LHCP_L": "",
+        "L1_LHCP_R": "",
+        "L1_RHCP_L": "",
+        "L1_RHCP_R": "",
+        "AIRCRAFT_REG": "",
+        "DDM_SOURCE": "",
+        "DDM_TIME_TYPE_SELECTOR": "",
+        "DEM_SOURCE": "",
+        "L1_ALGORITHM_VERSION": "",
+        "L1_DATA_VERSION": "",
+        "L1A_SIG_LUT_VERSION": "",
+        "L1A_NOISE_LUT_VERSION": "",
+        "A_LUT_VERSION": "",
+        "NGRX_PORT_MAPPING_VERSION": "",
+        "NADIR_ANT_DATA_VERSION": "",
+        "ZENITH_ANT_DATA_VERSION": "",
+        "PRN_SV_MAPS_VERSION": "",
+        "GPS_EIRP_PARAM_VERSION": "",
+        "LAND_MASK_VERSION": "",
+        "SURFACE_TYPE_VERSION": "",
+        "MEAN_SEA_SURFACE_VERSION": "",
+        "PER_BIN_ANT_VERSION": "",
+    }
+
+    with open(conf_file) as f:
+        for line in f:
+            if line.split("=")[0] in settings.keys():
+                settings[line.split("=")[0]] = (
+                    line.split("=")[1].replace("\n", "").replace('"', "")
+                )
+    if not all([y for x, y in settings.items()]):
+        missing = [x for x, y in settings.items() if not y]
+        raise Exception(
+            "config file missing the following variables: " + ", ".join(missing)
+        )
+
+    if args.input_L0_dir is not None:
+        L0_path = Path(args.input_L0_dir)
+    else:
+        # probably add some logic here to handle relative vs explicit paths in settings
+        L0_path = Path(settings["L1_L0_INPUT"])
+
+    if args.output_dir is not None:
+        L1_path = Path(args.output_dir)
+    else:
+        # probably add some logic here to handle relative vs explicit paths in settings
+        L1_path = Path(settings["L1_L1_OUTPUT"])
+
+    # Hardcoded directories as locations for input files
+    A_phy_LUT_path = this_dir.joinpath(Path("../dat/A_phy_LUT/"))
+    landmask_path = this_dir.joinpath(Path("../dat/cst/"))
+    dem_path = this_dir.joinpath(Path("../dat/dem/"))
+    dtu_path = this_dir.joinpath(Path("../dat/dtu/"))
+    gps_path = this_dir.joinpath(Path("../dat/gps/"))
+    L1_dict_path = this_dir.joinpath(Path("../dat/L1_Dict/"))
+    L1a_path = this_dir.joinpath(Path("../dat/L1a_cal/"))
+    lcv_path = this_dir.joinpath(Path("../dat/lcv/"))
+    orbit_path = this_dir.joinpath(Path("../dat/orbits/"))
+    pek_path = this_dir.joinpath(Path("../dat/pek/"))
+    rng_path = this_dir.joinpath(Path("../dat/rng/"))
+
+    # scattering area LUT
+    L1_A_PHY_LUT = A_phy_LUT_path.joinpath(Path(settings["L1_A_PHY_LUT"]))
+    # load ocean/land (distance to coast) mask
+    L1_LANDMASK = landmask_path.joinpath(Path(settings["L1_LANDMASK"]))
+    # load SRTM_30 DEM
+    L1_DEM = dem_path.joinpath(Path(settings["L1_DEM"]))
+    # load DTU10 model
+    L1_DTU = dtu_path.joinpath(Path(settings["L1_DTU"]))
+    # load PRN-SV and SV-EIRP(static) LUT
+    L1_SV_PRN = gps_path.joinpath(Path(settings["L1_SV_PRN"]))
+    L1_SV_eirp = gps_path.joinpath(Path(settings["L1_SV_eirp"]))
+    # L1_DICT file
+    L1_DICT = L1_dict_path.joinpath(Path(settings["L1_DICT"]))
+    # load L1a calibration tables
+    L1a_CAL_COUNTS = L1a_path.joinpath(Path(settings["L1a_CAL_COUNTS"]))
+    L1a_CAL_POWER = L1a_path.joinpath(Path(settings["L1a_CAL_POWER"]))
+    # load landcover mask
+    L1_LANDCOVER = lcv_path.joinpath(Path(settings["L1_LANDCOVER"]))
+    # process inland water mask
+    water_mask_paths = ["160E_40S", "170E_30S", "170E_40S"]
+    # load and process nadir NGRx-GNSS antenna patterns
+    L1_LHCP_L = rng_path.joinpath(Path(settings["L1_LHCP_L"]))
+    L1_LHCP_R = rng_path.joinpath(Path(settings["L1_LHCP_R"]))
+    L1_RHCP_L = rng_path.joinpath(Path(settings["L1_RHCP_L"]))
+    L1_RHCP_R = rng_path.joinpath(Path(settings["L1_RHCP_R"]))
+    rng_filenames = [L1_LHCP_L, L1_LHCP_R, L1_RHCP_L, L1_RHCP_R]
+
+    # set up input class that holds all input file data
+    inp = input_files(
+        L1a_CAL_COUNTS,
+        L1a_CAL_POWER,
+        L1_DEM,
+        L1_DTU,
+        L1_LANDMASK,
+        L1_LANDCOVER,
+        water_mask_paths,
+        pek_path,
+        L1_SV_PRN,
+        L1_SV_eirp,
+        rng_filenames,
+        L1_A_PHY_LUT,
+    )
+
+    # specify input L0 netcdf file
+    L0_filename = L0_path.joinpath(Path("20221103-121416_NZNV-NZCH.nc"))
+    L1_filename = L1_path.joinpath(Path("mike_test_auto.nc"))
+    # L0_filename = Path("20230404-065056_NZTU-NZWN.nc")
+    # L0_dataset = nc.Dataset(raw_data_path.joinpath(L0_filename))
+    process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings)
