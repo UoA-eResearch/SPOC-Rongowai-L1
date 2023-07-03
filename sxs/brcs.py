@@ -1,12 +1,9 @@
-import cmath
 import math
 import numpy as np
-import pymap3d as pm
 from scipy import constants
 from timeit import default_timer as timer
 
 from calibration import db2power
-from projections import ecef2lla
 
 
 def ddm_brcs2(power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, TSx, RSx):
@@ -72,74 +69,6 @@ def ddm_refl2(
     refl_copol = term4[0, 0] * power_analog_LHCP + term4[0, 1] * power_analog_RHCP
     refl_xpol = term4[1, 0] * power_analog_LHCP + term4[1, 1] * power_analog_RHCP
     return refl_copol, refl_xpol
-
-
-def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, ddm_ant):
-    """
-    this function derives Fresnel dimensions based on the Tx, Rx and Sx positions.
-    Fresnel dimension is computed only the DDM is classified as coherent reflection.
-    """
-    # define constants
-    eps_ocean = 74.62 + 51.92j  # complex permittivity of ocean
-    fc = 1575.42e6  # operating frequency
-    c = 299792458  # speed of light
-    _lambda = c / fc  # wavelength
-
-    # compute dimensions
-    R_tsp = np.linalg.norm(np.array(tx_pos_xyz) - np.array(sx_pos_xyz), 2)
-    R_rsp = np.linalg.norm(np.array(rx_pos_xyz) - np.array(sx_pos_xyz), 2)
-
-    term1 = R_tsp * R_rsp
-    term2 = R_tsp + R_rsp
-
-    # semi axis
-    a = math.sqrt(_lambda * term1 / term2)  # minor semi
-    b = a / math.cos(math.radians(inc_angle))  # major semi
-
-    # compute orientation relative to North
-    lon, lat, alt = ecef2lla.transform(*sx_pos_xyz, radians=False)
-    sx_lla = [lat, lon, alt]
-
-    tx_e, tx_n, _ = pm.ecef2enu(*tx_pos_xyz, *sx_lla, deg=True)
-    rx_e, rx_n, _ = pm.ecef2enu(*rx_pos_xyz, *sx_lla, deg=True)
-
-    tx_en = np.array([tx_e, tx_n])
-    rx_en = np.array([rx_e, rx_n])
-
-    vector_tr = rx_en - tx_en
-    unit_north = [0, 1]
-
-    term3 = np.dot(vector_tr, unit_north)
-    term4 = np.linalg.norm(vector_tr, 2) * np.linalg.norm(unit_north, 2)
-
-    theta = math.degrees(math.acos(term3 / term4))
-
-    fresnel_axis = [2 * b, 2 * a]
-    fresnel_orientation = theta
-
-    # fresenel coefficient only compute for ocean SPs
-    fresnel_coeff = np.nan
-
-    if dist_to_coast <= 0:
-        sint = math.degrees(math.sin(math.radians(inc_angle)))
-        cost = math.degrees(math.cos(math.radians(inc_angle)))
-
-        temp1 = cmath.sqrt(eps_ocean - sint * sint)
-
-        R_vv = (eps_ocean * cost - temp1) / (eps_ocean * cost + temp1)
-        R_hh = (cost - temp1) / (cost + temp1)
-
-        R_rl = (R_vv - R_hh) / 2
-        R_rr = (R_vv + R_hh) / 2
-
-        # -1 offset due to Matlab/Python indexing difference
-        if ddm_ant == 1:
-            fresnel_coeff = abs(R_rl) * abs(R_rl)
-        # -1 offset due to Matlab/Python indexing difference
-        elif ddm_ant == 2:
-            fresnel_coeff = abs(R_rr) * abs(R_rr)
-
-    return fresnel_coeff, fresnel_axis, fresnel_orientation
 
 
 def brcs_calculations(L0, L1):
