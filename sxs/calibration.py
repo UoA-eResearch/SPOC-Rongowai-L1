@@ -1,31 +1,12 @@
 import numpy as np
 import math
 from pathlib import Path
-from scipy.interpolate import interp1d
-
-
-# load L1a calibration tables
-L1a_path = Path().absolute().joinpath(Path("./dat/L1a_cal/"))
-L1a_cal_ddm_counts_db_filename = Path("L1A_cal_ddm_counts_dB.dat")
-L1a_cal_ddm_power_dbm_filename = Path("L1A_cal_ddm_power_dBm.dat")
-L1a_cal_ddm_counts_db = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_counts_db_filename))
-L1a_cal_ddm_power_dbm = np.loadtxt(L1a_path.joinpath(L1a_cal_ddm_power_dbm_filename))
 
 # offset delay rows to derive noise floor
 offset = 4
 # map rf_source to ANZ_port
 ANZ_port_dict = {0: 0, 4: 1, 8: 2}
 binning_thres_db = [50.5, 49.6, 50.4]
-
-# create the interpolation functions for the 3 ports
-L1a_cal_1dinterp = {}
-for i in range(3):
-    L1a_cal_1dinterp[i] = interp1d(
-        L1a_cal_ddm_counts_db[i, :],
-        L1a_cal_ddm_power_dbm[i, :],
-        kind="cubic",
-        fill_value="extrapolate",
-    )
 
 
 def power2db(power):
@@ -36,7 +17,7 @@ def db2power(db):
     return np.power(10, np.divide(db, 10))
 
 
-def L1a_counts2watts(ddm_counts, ANZ_port, std_dev):
+def L1a_counts2watts(inp, ddm_counts, ANZ_port, std_dev):
     """Converts raw DDM counts to DDM power in watts
 
     Parameters
@@ -71,7 +52,7 @@ def L1a_counts2watts(ddm_counts, ANZ_port, std_dev):
 
     # evaluate ddm power in dBm
     # Scipy doesn't like masked arrays, so undo here and reply after
-    ddm_power_dbm = L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts_db))
+    ddm_power_dbm = inp.L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts_db))
     ddm_power_dbm = (
         ddm_power_dbm
         + std_dev_db_ch
@@ -84,6 +65,7 @@ def L1a_counts2watts(ddm_counts, ANZ_port, std_dev):
 
 
 def ddm_calibration(
+    inp,
     std_dev_rf1,
     std_dev_rf2,
     std_dev_rf3,
@@ -160,6 +142,7 @@ def ddm_calibration(
 
             # perform L1a calibration from Counts to Watts
             ddm_power_watts1 = L1a_counts2watts(
+                inp,
                 ddm_power_counts1,
                 ANZ_port1,
                 std_dev1,

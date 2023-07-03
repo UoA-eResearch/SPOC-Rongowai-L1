@@ -9,7 +9,7 @@ import os
 from pathlib import Path
 from PIL import Image
 import rasterio
-from scipy.interpolate import RegularGridInterpolator
+from scipy.interpolate import interp1d, RegularGridInterpolator
 
 # Required to load the land cover mask file
 Image.MAX_IMAGE_PIXELS = None
@@ -143,6 +143,16 @@ class input_files:
     ):
         self.L1a_cal_ddm_counts_db = np.loadtxt(L1a_cal_ddm_counts_db_filename)
         self.L1a_cal_ddm_power_dbm = np.loadtxt(L1a_cal_ddm_power_dbm_filename)
+
+        # create the interpolation functions for the 3 ports
+        self.L1a_cal_1dinterp = {}
+        for i in range(3):
+            self.L1a_cal_1dinterp[i] = interp1d(
+                self.L1a_cal_ddm_counts_db[i, :],
+                self.L1a_cal_ddm_power_dbm[i, :],
+                kind="cubic",
+                fill_value="extrapolate",
+            )
 
         self.dem = rasterio.open(dem_filename)
         self.dem = {
