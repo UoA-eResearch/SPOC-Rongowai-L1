@@ -714,7 +714,6 @@ def specular_calculations(
                         inp.dtu10,
                         inp.landmask_nz,
                     )
-                    tn1 = timer()
                     lon, lat, alt = ecef2lla.transform(*sx_pos_xyz1, radians=False)
                     sx_pos_lla1 = [lat, lon, alt]
                     # <lon,lat,alt> of the specular reflection
@@ -743,6 +742,7 @@ def specular_calculations(
                     L1.postCal["sp_inc_angle"][sec][ngrx_channel] = inc_angle_deg1
                     L1.postCal["sp_d_snell_angle"][sec][ngrx_channel] = d_snell_deg1
 
+                    tn1 = timer()
                     # Part 4.2: SP-related variables - 1
                     # this part derives tx/rx gains, ranges and other related variables
                     # derive SP related geo-parameters, including angles in various frames, ranges and antenna gain/GPS EIRP
