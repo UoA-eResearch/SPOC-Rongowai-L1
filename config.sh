@@ -1,10 +1,10 @@
 # ----------- Input L0 dir ---------------
-# typically /XXX/YYY/SPOC_Rongowai_L1/dat/raw/
-L1_L0_INPUT="/PATH/TO/L0_FILES"
+# If not defined then default to ./dat/raw/
+#L1_L0_INPUT="/PATH/TO/L0_FILES"
 
 # ----------- Output L1 dir --------------
-# typically /XXX/YYY/SPOC_Rongowai_L1/out/
-L1_L1_OUTPUT="/PATH/TO/L1_FILES"
+# If not defined then default to ./out/
+#L1_L1_OUTPUT="/PATH/TO/L1_FILES"
 
 # ----------- input dat files ------------
 # ./dat/A_phy_LUT/

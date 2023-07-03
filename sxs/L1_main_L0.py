@@ -131,7 +131,7 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--conf-file",
         type=str,
-        help="path for configuration file that specifies I/O and version settings. Default='../config'",
+        help="path for configuration file that specifies I/O and version settings. Default='../config.sh'",
     )
     args = argparser.parse_args()
 
@@ -163,19 +163,19 @@ if __name__ == "__main__":
                 "--output-dir error: " + str(args.output_dir) + " not a valid directory"
             )
 
-    this_dir = os.path.dirname(os.path.realpath(__file__))
+    this_dir = Path(os.path.dirname(os.path.realpath(__file__)))
     if args.conf_file is not None:
         if not os.path.isfile(args.conf_file):
             argparser.error(
                 "--output-dir error: " + str(args.output_dir) + " not a valid file"
             )
-        conf_file = Path(args.output_dir)
+        conf_file = Path(args.conf_file)
     else:
-        conf_file = Path(this_dir + "/../config")
+        conf_file = this_dir.joinpath(Path("../config.sh"))
 
     settings = {
-        "L1_L0_INPUT": "",
-        "L1_L1_OUTPUT": "",
+        # "L1_L0_INPUT": "",
+        # "L1_L1_OUTPUT": "",
         "L1_A_PHY_LUT": "",
         "L1_LANDMASK": "",
         "L1_DEM": "",
@@ -224,15 +224,19 @@ if __name__ == "__main__":
 
     if args.input_L0_dir is not None:
         L0_path = Path(args.input_L0_dir)
-    else:
+    elif "L1_L0_INPUT" in settings:
         # probably add some logic here to handle relative vs explicit paths in settings
         L0_path = Path(settings["L1_L0_INPUT"])
+    else:
+        L0_path = this_dir.joinpath(Path("../dat/raw/"))
 
     if args.output_dir is not None:
         L1_path = Path(args.output_dir)
-    else:
+    elif "L1_L1_OUTPUT" in settings:
         # probably add some logic here to handle relative vs explicit paths in settings
         L1_path = Path(settings["L1_L1_OUTPUT"])
+    else:
+        L1_path = this_dir.joinpath(Path("../out/"))
 
     # Hardcoded directories as locations for input files
     A_phy_LUT_path = this_dir.joinpath(Path("../dat/A_phy_LUT/"))

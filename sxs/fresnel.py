@@ -4,7 +4,6 @@ import numpy as np
 import pymap3d as pm
 from scipy import constants
 
-from brcs import get_fresnel
 from calibration import power2db
 from projections import ecef2lla
 
