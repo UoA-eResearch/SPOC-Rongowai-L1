@@ -4,6 +4,8 @@ import numpy as np
 from pathlib import Path
 from scipy import constants
 
+from load_files import load_orbit_file
+
 # load C++ file for orbit calculations
 c_path = Path().absolute().joinpath(Path("./sxs/lib/"))
 GPS_GetSVInfo_filename = Path("GPS_GetSVInfo.so")
@@ -168,3 +170,80 @@ def satellite_orbits(
             track_id[sec][ngrx_channel] = track_id[sec][ngrx_channel + J_2] = (
                 np.where(trans_id_unique == prn1)[0][0] + 1
             )
+
+
+def calculate_satellite_orbits(L0, L1, inp):
+    # determine unique satellite transponder IDs
+    trans_id_unique = np.unique(L0.transmitter_id)
+    trans_id_unique = trans_id_unique[trans_id_unique > 0]
+
+    # create data arrays for C++ code to populate
+    orbit_bundle = [
+        L1.postCal["tx_pos_x"],
+        L1.postCal["tx_pos_y"],
+        L1.postCal["tx_pos_z"],
+        L1.postCal["tx_vel_x"],
+        L1.postCal["tx_vel_y"],
+        L1.postCal["tx_vel_z"],
+        L1.postCal["tx_clk_bias"],
+        L1.postCal["prn_code"],
+        L1.postCal["sv_num"],
+        L1.postCal["track_id"],
+        trans_id_unique,
+    ]
+
+    # determine whether flight spans a UTC day
+    if L1.time_coverage_start_obj.day == L1.time_coverage_end_obj.day:
+        # determine single orbit file of that day
+        orbit_file1 = load_orbit_file(
+            L1.gps_week,
+            L1.gps_tow,
+            L1.time_coverage_start_obj,
+            L1.time_coverage_end_obj,
+        )
+        # calculate satellite orbits, data assigned to orbit_bundle arrays
+        satellite_orbits(
+            L0.J_2,
+            L1.gps_week,
+            L1.gps_tow,
+            L0.transmitter_id,
+            inp.SV_PRN_LUT,
+            orbit_file1,
+            *orbit_bundle,
+        )
+    else:
+        # find idx of day change in timestamps
+        # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
+        change_idx = np.where(np.diff(np.floor(L1.gps_tow / 86400)) > 0)[0][0] + 1
+        # determine day_N and day_N+1 orbit files to use
+        orbit_file1, orbit_file2 = load_orbit_file(
+            L1.gps_week,
+            L1.gps_tow,
+            L1.time_coverage_start_obj,
+            L1.time_coverage_end_obj,
+            change_idx=change_idx,
+        )
+        # calculate first chunk of specular points using 1st orbit file
+        # data assigned to orbit_bundle arrays
+        satellite_orbits(
+            L0.J_2,
+            L1.gps_week,
+            L1.gps_tow,
+            L0.transmitter_id,
+            inp.SV_PRN_LUT,
+            orbit_file1,
+            *orbit_bundle,
+            end=change_idx,
+        )
+        # calculate last chunk of specular points using 2nd orbit file
+        # data assigned to orbit_bundle arrays
+        satellite_orbits(
+            L0.J_2,
+            L1.gps_week,
+            L1.gps_tow,
+            L0.transmitter_id,
+            inp.SV_PRN_LUT,
+            orbit_file2,
+            *orbit_bundle,
+            start=change_idx,
+        )
