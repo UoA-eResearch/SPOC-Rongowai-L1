@@ -21,8 +21,8 @@ L1_SV_eirp="GPS_SV_EIRP_Params_v7.dat"
 # ./dat/L1_Dict/
 L1_DICT="L1_Dict_v2_1m.xlsx"
 # ./dat/L1a_cal/
-L1_CAL_COUNTS="L1A_cal_ddm_counts_dB.dat"
-L1_CAL_POWER="L1A_cal_ddm_power_dBm.dat"
+L1a_CAL_COUNTS="L1A_cal_ddm_counts_dB.dat"
+L1a_CAL_POWER="L1A_cal_ddm_power_dBm.dat"
 # ./dat/lcv/
 L1_LANDCOVER="lcv.png"
 # ./dat/orbits/
