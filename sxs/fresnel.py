@@ -3,7 +3,6 @@ import math
 import numpy as np
 import pymap3d as pm
 from scipy import constants
-from timeit import default_timer as timer
 
 from brcs import get_fresnel
 from calibration import power2db
@@ -78,7 +77,6 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
 
 
 def fresnel_calculations(L0, L1, rx_pos_x, rx_pos_y, rx_pos_z):
-    t0 = timer()
     # TODO can probably condense this loop into thre above loop
     for sec in range(L0.I):
         for ngrx_channel in range(L0.J):
@@ -123,8 +121,6 @@ def fresnel_calculations(L0, L1, rx_pos_x, rx_pos_y, rx_pos_z):
                 if CP1 > 0:
                     CP_db1 = power2db(CP1)
                     L1.postCal["nbrcs_cross_pol"][sec][ngrx_channel] = CP_db1
-
-    print(f"******** finish processing part 7 data with {timer() - t0}********")
 
     L1.postCal["nbrcs_cross_pol"][:, L0.J_2 : L0.J] = L1.postCal["nbrcs_cross_pol"][
         :, 0 : L0.J_2

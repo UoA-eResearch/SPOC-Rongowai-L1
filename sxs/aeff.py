@@ -1,7 +1,6 @@
 import math
 import numpy as np
 from scipy.signal import convolve2d
-from timeit import default_timer as timer
 
 from projections import ecef2lla
 
@@ -197,7 +196,6 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
         L0.doppler_bin_res,
     )  # 0-based
 
-    t0 = timer()
     # iterate over each second of flight
     for sec in range(L0.I):
         # retrieve velocities and altitdues
@@ -334,7 +332,6 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
 
                 L1.coherency_ratio[sec][ngrx_channel] = CR1
                 L1.coherency_state[sec][ngrx_channel] = CS1
-    print(f"******** finish processing part 6 data with {timer() - t0}********")
 
     L1.A_eff[:, L0.J_2 : L0.J] = L1.A_eff[:, 0 : L0.J_2]
     L1.postCal["nbrcs_scatter_area"][:, L0.J_2 : L0.J] = L1.postCal[

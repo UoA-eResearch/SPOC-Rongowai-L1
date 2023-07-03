@@ -1,7 +1,6 @@
 import math
 import numpy as np
 from scipy import constants
-from timeit import default_timer as timer
 
 from calibration import db2power
 
@@ -91,7 +90,6 @@ def brcs_calculations(L0, L1):
     # single noise floor from valid DDMs
     sp_delay_row_LHCP = L1.sp_delay_row[:, :10]  # reference to LHCP delay row
 
-    t0 = timer()
     for sec in range(L0.I):
         for ngrx_channel in range(L0.J_2):
             # compensate cable loss
@@ -169,4 +167,3 @@ def brcs_calculations(L0, L1):
                 L1.postCal["norm_refl_waveform"][sec][
                     ngrx_channel + L0.J_2
                 ] = norm_refl_waveform_xpol1
-    print(f"******** finish processing part 5 data with {timer() - t0}********")

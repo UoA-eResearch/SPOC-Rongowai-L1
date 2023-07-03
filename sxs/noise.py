@@ -1,6 +1,5 @@
 import numpy as np
 from scipy import constants
-from timeit import default_timer as timer
 
 from calibration import power2db
 from utils import expand_to_RHCP
@@ -90,7 +89,6 @@ def noise_floor_prep(
 ):
     delay_offset = 4
 
-    t0 = timer()
     # derive floating SP bin location and effective scattering area A_eff
     for sec in range(L0.I):
         # retrieve rx positions and velocities
@@ -206,7 +204,6 @@ def noise_floor_prep(
 
             L1.postCal["zenith_code_phase"][sec][ngrx_channel] = zenith_code_phase1
 
-    print(f"******** finish processing part 4B data with {timer() - t0}********")
     # extend to RHCP channels
     L1.expand_noise_arrays(L0.J_2, L0.J)
 
