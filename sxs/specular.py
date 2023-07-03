@@ -685,8 +685,6 @@ def specular_calculations(
 
                 # only process samples with valid sx positions, i.e., LOS = True
                 if LOS_flag1:
-                    tn1 = timer()
-
                     # Part 4.1: SP solver
                     # derive SP positions, angle of incidence and distance to coast
                     # returning sx_pos_lla1 in Py version to avoid needless coord conversions
@@ -716,8 +714,7 @@ def specular_calculations(
                         inp.dtu10,
                         inp.landmask_nz,
                     )
-                    tn += timer() - tn1
-
+                    tn1 = timer()
                     lon, lat, alt = ecef2lla.transform(*sx_pos_xyz1, radians=False)
                     sx_pos_lla1 = [lat, lon, alt]
                     # <lon,lat,alt> of the specular reflection
@@ -794,6 +791,8 @@ def specular_calculations(
                     L1.sx_rx_gain_xpol[sec, ngrx_channel] = sx_rx_gain_LHCP1[1]
                     # RHCP channel rx gain
                     L1.sx_rx_gain_xpol[sec, ngrx_channel + L0.J_2] = sx_rx_gain_RHCP1[0]
+                    tn += timer() - tn1
+
         print(
             f"******** start processing part 4A {sec} second data with {timer() - t0} ********"
         )
