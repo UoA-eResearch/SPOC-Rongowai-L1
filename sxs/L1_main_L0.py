@@ -5,7 +5,7 @@ from pathlib import Path
 import os
 import warnings
 
-# warnings.simplefilter(action="ignore", category=FutureWarning)
+warnings.simplefilter(action="ignore", category=RuntimeWarning)
 
 from aeff import aeff_and_nbrcs
 from brcs import brcs_calculations
