@@ -10,7 +10,7 @@ from load_files import load_orbit_file
 
 # load C++ file for orbit calculations
 this_dir = Path(os.path.dirname(os.path.realpath(__file__)))
-c_path = this_dir.joinpath(Path("./sxs/lib/"))
+c_path = this_dir.joinpath(Path("./lib/"))
 GPS_GetSVInfo_filename = Path("GPS_GetSVInfo.so")
 GPS_GetSVInfo = CDLL(str(c_path.joinpath(GPS_GetSVInfo_filename)))
 # specify C++ variable for len(8) array of doubles
