@@ -1,3 +1,5 @@
+import os
+
 from astropy.time import Time as astro_time
 from ctypes import CDLL, c_double, c_uint, c_char_p, byref
 import numpy as np
@@ -7,7 +9,8 @@ from scipy import constants
 from load_files import load_orbit_file
 
 # load C++ file for orbit calculations
-c_path = Path().absolute().joinpath(Path("./sxs/lib/"))
+this_dir = Path(os.path.dirname(os.path.realpath(__file__)))
+c_path = this_dir.joinpath(Path("./sxs/lib/"))
 GPS_GetSVInfo_filename = Path("GPS_GetSVInfo.so")
 GPS_GetSVInfo = CDLL(str(c_path.joinpath(GPS_GetSVInfo_filename)))
 # specify C++ variable for len(8) array of doubles
