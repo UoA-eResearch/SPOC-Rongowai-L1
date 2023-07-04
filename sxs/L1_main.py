@@ -174,8 +174,8 @@ if __name__ == "__main__":
         conf_file = this_dir.joinpath(Path("../config.sh"))
 
     settings = {
-        # "L1_L0_INPUT": "",
-        # "L1_L1_OUTPUT": "",
+        "L1_L0_INPUT": "",
+        "L1_L1_OUTPUT": "",
         "L1_A_PHY_LUT": "",
         "L1_LANDMASK": "",
         "L1_DEM": "",
@@ -216,7 +216,9 @@ if __name__ == "__main__":
                 settings[line.split("=")[0]] = (
                     line.split("=")[1].replace("\n", "").replace('"', "")
                 )
-    if not all([y for x, y in settings.items()]):
+    if not all(
+        [y for x, y in settings.items() if x not in ["L1_L0_INPUT", "L1_L1_OUTPUT"]]
+    ):
         missing = [x for x, y in settings.items() if not y]
         raise Exception(
             "config file missing the following variables: " + ", ".join(missing)
@@ -224,7 +226,7 @@ if __name__ == "__main__":
 
     if args.input_L0_dir is not None:
         L0_path = Path(args.input_L0_dir)
-    elif "L1_L0_INPUT" in settings:
+    elif settings["L1_L0_INPUT"]:
         # probably add some logic here to handle relative vs explicit paths in settings
         L0_path = Path(settings["L1_L0_INPUT"])
     else:
@@ -232,7 +234,7 @@ if __name__ == "__main__":
 
     if args.output_dir is not None:
         L1_path = Path(args.output_dir)
-    elif "L1_L1_OUTPUT" in settings:
+    elif settings["L1_L1_OUTPUT"]:
         # probably add some logic here to handle relative vs explicit paths in settings
         L1_path = Path(settings["L1_L1_OUTPUT"])
     else:
