@@ -1,8 +1,8 @@
 # mike.laverick@auckland.ac.nz
 # L1_main_L0.py
 import argparse
-from pathlib import Path
 import os
+from pathlib import Path
 import warnings
 
 warnings.simplefilter(action="ignore", category=RuntimeWarning)
@@ -296,9 +296,12 @@ if __name__ == "__main__":
         L1_A_PHY_LUT,
     )
 
-    # specify input L0 netcdf file
-    L0_filename = L0_path.joinpath(Path("20221103-121416_NZNV-NZCH.nc"))
-    L1_filename = L1_path.joinpath(Path("mike_test_auto.nc"))
-    # L0_filename = Path("20230404-065056_NZTU-NZWN.nc")
-    # L0_dataset = nc.Dataset(raw_data_path.joinpath(L0_filename))
-    process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings)
+    # find all L0 files in L0_path
+    L0_files = [filepath for filepath in L0_path.glob("*.nc")]
+
+    for filepath in L0_files:
+        # print(filepath, os.path.basename(filepath))
+        new_L1_file = os.path.basename(filepath).split(".")
+        new_L1_file = new_L1_file[0] + "_L1." + new_L1_file[1]
+        new_L1_file = L1_path.joinpath(Path(new_L1_file))
+        process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
