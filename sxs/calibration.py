@@ -1,6 +1,9 @@
 import numpy as np
 import math
 
+# ignore divide by zero in log10
+np.seterr(divide="ignore")
+
 # offset delay rows to derive noise floor
 offset = 4
 # map rf_source to ANZ_port
