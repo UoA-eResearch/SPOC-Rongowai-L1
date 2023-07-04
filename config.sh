@@ -35,6 +35,10 @@ L1_LHCP_R="GNSS_LHCP_R_gain_db_i_v1.dat"
 L1_RHCP_L="GNSS_RHCP_L_gain_db_i_v1.dat"
 L1_RHCP_R="GNSS_RHCP_R_gain_db_i_v1.dat"
 
+# Credentials for automated orbital retrieval via cddis.nasa.gov
+L1_CDDIS_USERNAME="USERNAME"
+L1_CDDIS_PASSWORD="PASSWORD"
+
 # ---------- L1 Metadata info ------------
 # default value
 AIRCRAFT_REG="ZK-NFA"

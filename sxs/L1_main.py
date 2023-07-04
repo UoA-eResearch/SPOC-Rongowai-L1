@@ -45,7 +45,7 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
     # Part 2: Derive TX related variables
     # This part derives TX positions and velocities, maps between PRN and SVN,
     # and gets track ID
-    calculate_satellite_orbits(L0, L1, inp)
+    calculate_satellite_orbits(settings, L0, L1, inp)
 
     # Part 3: L1a calibration
     # this part converts from raw counts to signal power in watts and complete

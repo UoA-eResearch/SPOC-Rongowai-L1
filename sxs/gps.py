@@ -175,7 +175,7 @@ def satellite_orbits(
             )
 
 
-def calculate_satellite_orbits(L0, L1, inp):
+def calculate_satellite_orbits(settings, L0, L1, inp):
     # determine unique satellite transponder IDs
     trans_id_unique = np.unique(L0.transmitter_id)
     trans_id_unique = trans_id_unique[trans_id_unique > 0]
@@ -199,6 +199,7 @@ def calculate_satellite_orbits(L0, L1, inp):
     if L1.time_coverage_start_obj.day == L1.time_coverage_end_obj.day:
         # determine single orbit file of that day
         orbit_file1 = load_orbit_file(
+            settings,
             L1.gps_week,
             L1.gps_tow,
             L1.time_coverage_start_obj,
@@ -220,6 +221,7 @@ def calculate_satellite_orbits(L0, L1, inp):
         change_idx = np.where(np.diff(np.floor(L1.gps_tow / 86400)) > 0)[0][0] + 1
         # determine day_N and day_N+1 orbit files to use
         orbit_file1, orbit_file2 = load_orbit_file(
+            settings,
             L1.gps_week,
             L1.gps_tow,
             L1.time_coverage_start_obj,

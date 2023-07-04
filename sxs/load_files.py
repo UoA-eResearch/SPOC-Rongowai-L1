@@ -10,6 +10,11 @@ from pathlib import Path
 from PIL import Image
 import rasterio
 from scipy.interpolate import interp1d, RegularGridInterpolator
+import urllib
+import os
+from http.cookiejar import CookieJar
+import gzip
+import shutil
 
 # Required to load the land cover mask file
 Image.MAX_IMAGE_PIXELS = None
@@ -313,9 +318,85 @@ def load_A_phy_LUT(filepath):
     # return rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all
 
 
-# calculate which orbit file to load
-# TODO automate retrieval of orbit files for new days
-def load_orbit_file(gps_week, gps_tow, start_obj, end_obj, change_idx=0):
+def retrieve_and_extract_orbit_file(settings, gps_week, gps_filename, orbit_path):
+    """
+    This code was adapted from https://wiki.earthdata.nasa.gov/display/EL/How+To+Access+Data+With+Python
+    """
+    # The user credentials that will be used to authenticate access to the data
+    username = settings["L1_CDDIS_USERNAME"]
+    password = settings["L1_CDDIS_PASSWORD"]
+
+    base_url = "https://cddis.nasa.gov/archive/gnss/products/"
+    file_name = gps_filename + ".gz"
+    url = base_url + str(gps_week) + "/" + file_name
+
+    gz_file_full = orbit_path.joinpath(Path(file_name))
+    sp3_file_full = orbit_path.joinpath(Path(gps_filename))
+
+    # Create a password manager to deal with the 401 reponse that is returned from
+    # Earthdata Login
+
+    password_manager = urllib.request.HTTPPasswordMgrWithDefaultRealm()
+    password_manager.add_password(
+        None, "https://urs.earthdata.nasa.gov", username, password
+    )
+
+    # Create a cookie jar for storing cookies. This is used to store and return
+    # the session cookie given to use by the data server (otherwise it will just
+    # keep sending us back to Earthdata Login to authenticate).  Ideally, we
+    # should use a file based cookie jar to preserve cookies between runs. This
+    # will make it much more efficient.
+
+    cookie_jar = CookieJar()
+
+    # Install all the handlers.
+    opener = urllib.request.build_opener(
+        urllib.request.HTTPBasicAuthHandler(password_manager),
+        # urllib.request.HTTPHandler(debuglevel=1),    # Uncomment these two lines to see
+        # urllib.request.HTTPSHandler(debuglevel=1),   # details of the requests/responses
+        urllib.request.HTTPCookieProcessor(cookie_jar),
+    )
+    urllib.request.install_opener(opener)
+
+    # Create and submit the requests. There are a wide range of exceptions that
+    # can be thrown here, including HTTPError and URLError. These should be
+    # caught and handled.
+
+    # Open a request for the data, and download a specific file
+    DataRequest = urllib.request.Request(url)
+    DataRequest.add_header(
+        "Cookie", str(cookie_jar)
+    )  # Pass the saved cookie into a second HTTP request
+    DataResponse = urllib.request.urlopen(DataRequest)
+
+    # Get the redirect url and append 'app_type=401'
+    # to do basic http auth
+    DataRedirect_url = DataResponse.geturl()
+    DataRedirect_url += "&app_type=401"
+
+    # Request the resource at the modified redirect url
+    try:
+        DataRequest = urllib.request.Request(DataRedirect_url)
+        DataResponse = urllib.request.urlopen(DataRequest)
+    except urllib.error.HTTPError:
+        return False
+
+    DataBody = DataResponse.read()
+    # Save file to working directory
+    file_ = open(gz_file_full, "wb")
+    file_.write(DataBody)
+    file_.close()
+
+    # unpack .gz file into .SP3 file
+    with gzip.open(gz_file_full, "rb") as f_in:
+        with open(sp3_file_full, "wb") as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    # delete .gz file
+    os.remove(gz_file_full)
+    return True
+
+
+def load_orbit_file(settings, gps_week, gps_tow, start_obj, end_obj, change_idx=0):
     """Determine which orbital file to use based upon gps_week and gps_tow.
 
     Parameters
@@ -350,24 +431,30 @@ def load_orbit_file(gps_week, gps_tow, start_obj, end_obj, change_idx=0):
         + "{:03d}".format(start_obj.timetuple().tm_yday)  # match for the dropbox data
         + "0000_01D_15M_ORB.SP3"
     )
-    month_year = start_obj.strftime("%B %Y")
     sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
     if not os.path.isfile(sp3_filename1_full):
-        # try loading in alternate name
-        sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".SP3"
-        sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
-        if not os.path.isfile(sp3_filename1_full):
-            # try loading in ealiest format name
-            sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".sp3"
+        # try downloading file from NASA (not implemented for old format...)
+        success = retrieve_and_extract_orbit_file(
+            settings, gps_week, sp3_filename1, orbit_path
+        )
+        if not success:
+            # try loading in alternate name from local
+            sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".SP3"
             sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
             if not os.path.isfile(sp3_filename1_full):
-                # TODO implement a mechanism for last valid file?
-                raise Exception("Orbit file not found...")
+                # try loading in earliest format name from local
+                sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".sp3"
+                sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
+                if not os.path.isfile(sp3_filename1_full):
+                    # TODO implement a mechanism for last valid file?
+                    raise Exception(
+                        "Orbit file not found locally or via NASA. Too soon for file release?"
+                    )
     if change_idx:
         # if change_idx then also determine the day priors orbit file and return both
         # substitute in last gps_week/gps_tow values as first, end_obj as start_obj
         sp3_filename2_full = load_orbit_file(
-            gps_week[-1:], gps_tow[-1:], end_obj, end_obj, change_idx=0
+            settings, gps_week[-1:], gps_tow[-1:], end_obj, end_obj, change_idx=0
         )
         return sp3_filename1_full, sp3_filename2_full
     return sp3_filename1_full
