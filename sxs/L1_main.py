@@ -190,6 +190,8 @@ if __name__ == "__main__":
         "L1_LHCP_R": "",
         "L1_RHCP_L": "",
         "L1_RHCP_R": "",
+        "L1_CDDIS_USERNAME": "",
+        "L1_CDDIS_PASSWORD": "",
         "AIRCRAFT_REG": "",
         "DDM_SOURCE": "",
         "DDM_TIME_TYPE_SELECTOR": "",
@@ -222,6 +224,13 @@ if __name__ == "__main__":
         missing = [x for x, y in settings.items() if not y]
         raise Exception(
             "config file missing the following variables: " + ", ".join(missing)
+        )
+
+    if (settings["L1_CDDIS_USERNAME"] == "USERNAME") or (
+        settings["L1_CDDIS_PASSWORD"] == "PASSWORD"
+    ):
+        raise Exception(
+            "Please set L1_CDDIS credentials correctly or risk retrieving no orbit files"
         )
 
     if args.input_L0_dir is not None:
