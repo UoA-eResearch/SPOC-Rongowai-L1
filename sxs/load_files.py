@@ -435,7 +435,7 @@ def load_orbit_file(settings, gps_week, gps_tow, start_obj, end_obj, change_idx=
     if not os.path.isfile(sp3_filename1_full):
         # try downloading file from NASA (not implemented for old format...)
         success = retrieve_and_extract_orbit_file(
-            settings, gps_week, sp3_filename1, orbit_path
+            settings, gps_week1, sp3_filename1, orbit_path
         )
         if not success:
             # try loading in alternate name from local
