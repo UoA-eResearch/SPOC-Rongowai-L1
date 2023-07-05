@@ -200,6 +200,7 @@ def calculate_satellite_orbits(settings, L0, L1, inp):
         # determine single orbit file of that day
         orbit_file1 = load_orbit_file(
             settings,
+            inp,
             L1.gps_week,
             L1.gps_tow,
             L1.time_coverage_start_obj,
@@ -222,6 +223,7 @@ def calculate_satellite_orbits(settings, L0, L1, inp):
         # determine day_N and day_N+1 orbit files to use
         orbit_file1, orbit_file2 = load_orbit_file(
             settings,
+            inp,
             L1.gps_week,
             L1.gps_tow,
             L1.time_coverage_start_obj,

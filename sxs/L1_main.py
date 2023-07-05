@@ -303,6 +303,7 @@ if __name__ == "__main__":
         L1_SV_eirp,
         rng_filenames,
         L1_A_PHY_LUT,
+        orbit_path,
     )
 
     # find all L0 files in L0_path

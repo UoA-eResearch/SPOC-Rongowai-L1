@@ -145,6 +145,7 @@ class input_files:
         SV_eirp_filename,
         rng_filenames,
         A_phy_LUT_path,
+        orbit_path,
     ):
         self.L1a_cal_ddm_counts_db = np.loadtxt(L1a_cal_ddm_counts_db_filename)
         self.L1a_cal_ddm_power_dbm = np.loadtxt(L1a_cal_ddm_power_dbm_filename)
@@ -198,6 +199,7 @@ class input_files:
         # rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all = load_A_phy_LUT(
         #    A_phy_LUT_path
         # )
+        self.orbit_path = orbit_path
 
 
 def load_netcdf(netcdf_variable):
@@ -396,7 +398,7 @@ def retrieve_and_extract_orbit_file(settings, gps_week, gps_filename, orbit_path
     return True
 
 
-def load_orbit_file(settings, gps_week, gps_tow, start_obj, end_obj, change_idx=0):
+def load_orbit_file(settings, inp, gps_week, gps_tow, start_obj, end_obj, change_idx=0):
     """Determine which orbital file to use based upon gps_week and gps_tow.
 
     Parameters
@@ -421,7 +423,6 @@ def load_orbit_file(settings, gps_week, gps_tow, start_obj, end_obj, change_idx=
     sp3_filename2_full: pathlib.Path
 
     """
-    orbit_path = Path().absolute().joinpath(Path("./dat/orbits/"))
     # determine gps_week and day of the week (1-7)
     gps_week1, gps_dow1 = int(gps_week[0]), int(gps_tow[0] // 86400)
     # try loading in latest file name for data
@@ -431,20 +432,20 @@ def load_orbit_file(settings, gps_week, gps_tow, start_obj, end_obj, change_idx=
         + "{:03d}".format(start_obj.timetuple().tm_yday)  # match for the dropbox data
         + "0000_01D_15M_ORB.SP3"
     )
-    sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
+    sp3_filename1_full = inp.orbit_path.joinpath(Path(sp3_filename1))
     if not os.path.isfile(sp3_filename1_full):
         # try downloading file from NASA (not implemented for old format...)
         success = retrieve_and_extract_orbit_file(
-            settings, gps_week1, sp3_filename1, orbit_path
+            settings, gps_week1, sp3_filename1, inp.orbit_path
         )
         if not success:
             # try loading in alternate name from local
             sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".SP3"
-            sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
+            sp3_filename1_full = inp.orbit_path.joinpath(Path(sp3_filename1))
             if not os.path.isfile(sp3_filename1_full):
                 # try loading in earliest format name from local
                 sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".sp3"
-                sp3_filename1_full = orbit_path.joinpath(Path(sp3_filename1))
+                sp3_filename1_full = inp.orbit_path.joinpath(Path(sp3_filename1))
                 if not os.path.isfile(sp3_filename1_full):
                     # TODO implement a mechanism for last valid file?
                     raise Exception(
