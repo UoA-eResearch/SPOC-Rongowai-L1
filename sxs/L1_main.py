@@ -122,6 +122,9 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
     # write to netcdf
     L1.add_to_postcal(L0)
     write_netcdf(L1.postCal, L1_DICT, L1.filename)
+    # clear processed L0 and L1 files/variables from memory
+    L0 = None
+    L1 = None
 
 
 if __name__ == "__main__":
