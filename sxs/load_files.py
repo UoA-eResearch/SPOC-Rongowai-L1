@@ -455,7 +455,7 @@ def load_orbit_file(settings, inp, gps_week, gps_tow, start_obj, end_obj, change
         # if change_idx then also determine the day priors orbit file and return both
         # substitute in last gps_week/gps_tow values as first, end_obj as start_obj
         sp3_filename2_full = load_orbit_file(
-            settings, gps_week[-1:], gps_tow[-1:], end_obj, end_obj, change_idx=0
+            settings, inp, gps_week[-1:], gps_tow[-1:], end_obj, end_obj, change_idx=0
         )
         return sp3_filename1_full, sp3_filename2_full
     return sp3_filename1_full
