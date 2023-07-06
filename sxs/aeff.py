@@ -276,7 +276,7 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
                 term1 = 1 - dop_frac1
                 term2 = 1 - del_frac1
 
-                if dop_intg1 <= 4:
+                if dop_intg1 <= 3:
                     brcs_copol_ddma1 = (
                         (term1 * term2 * brcs_copol1[del_intg1, dop_intg1])
                         + (term1 * del_frac1 * brcs_copol1[del_intg1 + 1, dop_intg1])

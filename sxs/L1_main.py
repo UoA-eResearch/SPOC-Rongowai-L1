@@ -318,3 +318,4 @@ if __name__ == "__main__":
         new_L1_file = new_L1_file[0] + "_L1." + new_L1_file[1]
         new_L1_file = L1_path.joinpath(Path(new_L1_file))
         process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
+        # TODO flag to delete L0 file

@@ -27,8 +27,6 @@ class L1_file:
         self.interpolate_L0(L0, inp)
 
     def load_from_config(self, settings):
-        # for now just hardcode stuff here
-        # TODO read from config
         self.postCal["aircraft_reg"] = settings["AIRCRAFT_REG"]
         self.postCal["ddm_source"] = settings["DDM_SOURCE"]
         self.postCal["ddm_time_type_selector"] = settings["DDM_TIME_TYPE_SELECTOR"]

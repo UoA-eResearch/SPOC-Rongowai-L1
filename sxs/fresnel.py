@@ -76,7 +76,6 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
 
 
 def fresnel_calculations(L0, L1, rx_pos_x, rx_pos_y, rx_pos_z):
-    # TODO can probably condense this loop into thre above loop
     for sec in range(L0.I):
         for ngrx_channel in range(L0.J):
             tx_pos_xyz1 = [

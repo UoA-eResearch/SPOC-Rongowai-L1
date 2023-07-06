@@ -59,7 +59,6 @@ def quality_flag_calculations(
             rx_pitch1 = rx_pitch[sec]
             rx_yaw1 = rx_yaw[sec]
 
-            # TODO is this an index issue???
             if (
                 (rx_roll1 >= 29) or (rx_pitch1 >= 9) or (rx_yaw1 >= 4)
             ):  # 0-based indexing

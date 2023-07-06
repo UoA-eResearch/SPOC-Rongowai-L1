@@ -674,7 +674,6 @@ def specular_calculations(
             }
 
             # only process these with valid TX positions
-            # TODO is checking only pos_x enough? it could be.
             if not np.isnan(L1.postCal["tx_pos_x"][sec][ngrx_channel]):
                 LOS_flag1 = los_status(tx_pos_xyz1, rx_pos_xyz1)
 
