@@ -32,7 +32,8 @@ grid_type_list = [
 
 class L0_file:
     """
-    Basic class to hold variables from the input L0 file
+    Basic class to load in, preprocess, and store variables from the input L0 file.
+    rx-related variables contain zeros as
     """
 
     def __init__(self, filename):
@@ -59,7 +60,8 @@ class L0_file:
             ds["/geometry/receiver/rx_clock_drift_mps"]
         )
 
-        # TODO: Some processing required here to fix leading/trailing/sporadic "zero" values?
+        self.remove_leading_trailing_zeros()
+        self.interpolate_zero_values()
 
         # load in ddm-related variables
         # tx ID/satellite PRN
@@ -125,10 +127,68 @@ class L0_file:
         self.shape_2d = self.transmitter_id.shape
         self.shape_4d = self.raw_counts.shape
 
+    def remove_leading_trailing_zeros(self):
+        """
+        This function removes leading/trailing zeros, replaces sporadic
+        zeros with interpolated values
+        """
+        # get index of first and last zeros using a bit of Python array magic
+        # idx_min = first non-zero index, idx_max = index of first trailing zero
+        # thus end of range that we need to specify
+        temp = np.array(self.pvt_gps_week)
+        temp != 0
+        idx_min, idx_max = temp.argmax(), temp.size - temp[::-1].argmax()
+
+        self.pvt_gps_week = self.pvt_gps_week[idx_min:idx_max]
+        self.pvt_gps_sec = self.pvt_gps_sec[idx_min:idx_max]
+        self.rx_pos_x_pvt = self.rx_pos_x_pvt[idx_min:idx_max]
+        self.rx_pos_y_pvt = self.rx_pos_y_pvt[idx_min:idx_max]
+        self.rx_pos_z_pvt = self.rx_pos_z_pvt[idx_min:idx_max]
+        self.rx_vel_x_pvt = self.rx_vel_x_pvt[idx_min:idx_max]
+        self.rx_vel_y_pvt = self.rx_vel_y_pvt[idx_min:idx_max]
+        self.rx_vel_z_pvt = self.rx_vel_z_pvt[idx_min:idx_max]
+        self.rx_roll_pvt = self.rx_roll_pvt[idx_min:idx_max]
+        self.rx_pitch_pvt = self.rx_pitch_pvt[idx_min:idx_max]
+        self.rx_yaw_pvt = self.rx_yaw_pvt[idx_min:idx_max]
+        self.rx_clk_bias_m_pvt = self.rx_clk_bias_m_pvt[idx_min:idx_max]
+        self.rx_clk_drift_mps_pvt = self.rx_clk_drift_mps_pvt[idx_min:idx_max]
+
+    def interpolate_zero_values(self):
+        """
+        This function finds the zero values in the L0 craft data and
+        replaces them with simple interpolations from nearest non-zero values.
+        Note: the matlab code only interpolates from +/- 1 index, which may produce
+        poor results if two zeros occur next to each other.
+        """
+
+        def interp_funct(array):
+            # 1D array of all indexes for linear interp 0:len(array)
+            x = np.arange(len(array))
+            # indexes of non-zero values that we wish to interp
+            idx = np.where(array != 0)[0]
+            # set up interp function using non-zero indexes and values
+            f = interp1d(x[idx], array[idx])
+            # return interpolated values for 1D array of all indexes 0:len(array)
+            return f(x)
+
+        self.pvt_gps_week = interp_funct(self.pvt_gps_week)
+        self.pvt_gps_sec = interp_funct(self.pvt_gps_sec)
+        self.rx_pos_x_pvt = interp_funct(self.rx_pos_x_pvt)
+        self.rx_pos_y_pvt = interp_funct(self.rx_pos_y_pvt)
+        self.rx_pos_z_pvt = interp_funct(self.rx_pos_z_pvt)
+        self.rx_vel_x_pvt = interp_funct(self.rx_vel_x_pvt)
+        self.rx_vel_y_pvt = interp_funct(self.rx_vel_y_pvt)
+        self.rx_vel_z_pvt = interp_funct(self.rx_vel_z_pvt)
+        self.rx_roll_pvt = interp_funct(self.rx_roll_pvt)
+        self.rx_pitch_pvt = interp_funct(self.rx_pitch_pvt)
+        self.rx_yaw_pvt = interp_funct(self.rx_yaw_pvt)
+        self.rx_clk_bias_m_pvt = interp_funct(self.rx_clk_bias_m_pvt)
+        self.rx_clk_drift_mps_pvt = interp_funct(self.rx_clk_drift_mps_pvt)
+
 
 class input_files:
     """
-    Basic class to hold data from input files
+    Basic class to load in and set up interpolator functions for input files
     """
 
     def __init__(
@@ -205,7 +265,8 @@ class input_files:
 def load_netcdf(netcdf_variable):
     """Unpack netcdf variable to python variable.
        Removes masked rows from 1D, 2D, & 4D NetCDF variables.
-       The masks smuggle NaN values into the code which throw off things.
+       The masks smuggle NaN values into the code which throw off things,
+       so we compress the arrays to drop NaN values
     Parameters
     ----------
     netcdf4.variable

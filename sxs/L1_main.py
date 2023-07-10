@@ -20,22 +20,8 @@ from output import L1_file, write_netcdf
 
 
 def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
-    # Prelaunch 1: Load L0 data
+    # Prelaunch 1: Load L0 data, filter valid timestamps, and smooth out 0 values
     L0 = L0_file(L0_filename)
-
-    # Prelaunch 1.5: Filter valid timestampes
-    # identify and compensate the value equal to 0 (randomly happens)
-    assert not (
-        L0.pvt_gps_week == 0
-    ).any(), "pvt_gps_week contains 0, need to compensate."
-    # the below is to process when ddm-related and rx-related variables do not
-    # have the same length, which happens for some of the L0 products
-    assert (
-        L0.pvt_gps_week.shape[0] == L0.I
-    ), "pvt_gps_week and transmitter_id do not have the same length."
-    #
-    # TODO: Additional processing if ddm- and rx- related varaibles aren't the same length
-    #
 
     # Part 1: General processing
     # This part derives global constants, timestamps, and all the other
