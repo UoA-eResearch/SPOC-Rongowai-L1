@@ -604,7 +604,8 @@ def sp_related(tx, rx, sx_pos_xyz, SV_eirp_LUT):
 
     # compute angles in nadir antenna frame and rx gain
     sp_theta_ant = sp_theta_body
-    sp_az_ant = sp_az_body + 180
+    # % no need the 180 compensation as it has been done in the gain LUT - 28 June
+    sp_az_ant = sp_az_body  # + 180
 
     if sp_az_ant > 360:
         sp_az_ant = sp_az_ant - 360

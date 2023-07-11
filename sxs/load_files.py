@@ -225,16 +225,17 @@ class input_files:
                 fill_value="extrapolate",
             )
 
-        self.dem = rasterio.open(dem_filename)
-        self.dem = {
-            "ele": self.dem.read(1),
-            "lat": np.linspace(
-                self.dem.bounds.top, self.dem.bounds.bottom, self.dem.height
-            ),
-            "lon": np.linspace(
-                self.dem.bounds.left, self.dem.bounds.right, self.dem.width
-            ),
-        }
+        self.dem = load_dem_file(dem_filename)
+        # self.dem = rasterio.open(dem_filename)
+        # self.dem = {
+        #    "ele": self.dem.read(1),
+        #    "lat": np.linspace(
+        #        self.dem.bounds.top, self.dem.bounds.bottom, self.dem.height
+        #    ),
+        #    "lon": np.linspace(
+        #        self.dem.bounds.left, self.dem.bounds.right, self.dem.width
+        #    ),
+        # }
 
         self.dtu10 = load_dat_file_grid(dtu_filename)
         self.landmask_nz = load_dat_file_grid(landmask_filename)
@@ -260,10 +261,42 @@ class input_files:
             "LHCP": load_antenna_pattern(rng_filenames[2]),
             "RHCP": load_antenna_pattern(rng_filenames[3]),
         }
-        self.rx_alt_bins, self.A_phy_LUT_interp = load_A_phy_LUT(A_phy_LUT_path)
+
+        # scattering area LUT - load in 4D array from range of files
+        A_PHY_LUT_paths = {
+            "A_phy_LUT_-0.5.dat": -0.5,
+            "A_phy_LUT_-0.4.dat": -0.4,
+            "A_phy_LUT_-0.3.dat": -0.3,
+            "A_phy_LUT_-0.2.dat": -0.2,
+            "A_phy_LUT_-0.1.dat": -0.1,
+            "A_phy_LUT_0.0.dat": 0.0,
+            "A_phy_LUT_0.1.dat": 0.1,
+            "A_phy_LUT_0.2.dat": 0.2,
+            "A_phy_LUT_0.3.dat": 0.3,
+            "A_phy_LUT_0.4.dat": 0.4,
+            "A_phy_LUT_0.5.dat": 0.5,
+        }
+        A_PHY_LUT_INPUTS = A_phy_LUT_path.joinpath(Path("input_variables.dat"))
+        (
+            self.rx_alt_bins,
+            self.inc_angle_bins,
+            self.az_angle_bins,
+        ) = load_A_phy_LUT_inputs(A_PHY_LUT_INPUTS)
+        num_rx_alt = len(self.rx_alt_bins)
+        num_inc_angle = len(self.inc_angle_bins)
+        num_az_angle = len(self.az_angle_bins)
+        self.A_phy_LUT_all = {}
+        for filename, value in A_PHY_LUT_paths.items():
+            A_PHY_LUT_DATA = A_phy_LUT_path.joinpath(Path(filename))
+            LUT = load_A_phy_LUT(
+                A_PHY_LUT_DATA, num_rx_alt, num_inc_angle, num_az_angle
+            )
+            self.A_phy_LUT_all[str(value)] = {"LUT": LUT, "sp_doppler_frac": value}
+        # self.rx_alt_bins, self.A_phy_LUT_interp = load_A_phy_LUT(A_phy_LUT_path)
         # rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all = load_A_phy_LUT(
         #    A_phy_LUT_path
         # )
+
         self.orbit_path = orbit_path
 
 
@@ -331,14 +364,16 @@ def load_antenna_pattern(filepath):
     2D numpy.array of antenna pattern data
     """
     with open(filepath, "rb") as f:
-        ignore_values = load_dat_file(f, "d", 5)
+        # The Matlab code does not use the azim_min, azim_max,
+        # elev_max, elev_min, values so ignore them here
+        ignore_values = load_dat_file(f, "H", 5)
         ant_data = load_dat_file(f, "d", 3601 * 1201)
     return np.reshape(ant_data, (-1, 3601))
 
 
 # load antenna binary files
-def load_A_phy_LUT(filepath):
-    """This function retrieves A_phy LUT and the input matrices
+def load_A_phy_LUT_inputs(filepath):
+    """This function retrieves A_phy LUT variables
 
     Parameters
     ----------
@@ -347,7 +382,7 @@ def load_A_phy_LUT(filepath):
 
     Returns
     -------
-    rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all
+    rx_alt_bins, inc_angle_bins, az_angle_bins
     """
     with open(filepath, "rb") as f:
         min_rx_alt = load_dat_file(f, "H", 1)  # uint16
@@ -368,9 +403,24 @@ def load_A_phy_LUT(filepath):
         ) + min_inc_angle
         az_angle_bins = (np.asarray(range(num_az_angle)) * res_az_angle) + min_az_angle
 
-        A_phy_LUT_all = np.full(
-            [num_rx_alt, num_inc_angle, num_az_angle, 7, 41], np.nan
-        )
+    return rx_alt_bins, inc_angle_bins, az_angle_bins
+
+
+# load antenna binary files
+def load_A_phy_LUT(filepath, num_rx_alt, num_inc_angle, num_az_angle):
+    """This function retrieves A_phy LUT and the input matrices
+
+    Parameters
+    ----------
+    filepath : pathlib.Path
+        path to file
+
+    Returns
+    -------
+    A_phy_LUT
+    """
+    with open(filepath, "rb") as f:
+        A_phy_LUT = np.full([num_rx_alt, num_inc_angle, num_az_angle, 7, 41], np.nan)
 
         for m in range(num_rx_alt):
             for n in range(num_inc_angle):
@@ -378,12 +428,12 @@ def load_A_phy_LUT(filepath):
                     data = np.reshape(
                         load_dat_file(f, "I", 7 * 41), (41, 7)
                     ).T  # uint32
-                    A_phy_LUT_all[m, n, k] = data
+                    A_phy_LUT[m, n, k] = data
 
-    return rx_alt_bins, RegularGridInterpolator(
-        (rx_alt_bins, inc_angle_bins, az_angle_bins), A_phy_LUT_all, bounds_error=True
-    )
-    # return rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all
+    # return rx_alt_bins, RegularGridInterpolator(
+    #    (rx_alt_bins, inc_angle_bins, az_angle_bins), A_phy_LUT_all, bounds_error=True
+    # )
+    return A_phy_LUT
 
 
 def retrieve_and_extract_orbit_file(settings, gps_week, gps_filename, orbit_path):
@@ -553,6 +603,49 @@ def load_dat_file_grid(filepath):
         "lat": np.linspace(temp["lat_min"], temp["lat_max"], temp["num_lat"]),
         "lon": np.linspace(temp["lon_min"], temp["lon_max"], temp["num_lon"]),
         "ele": np.reshape(map_data, (-1, temp["num_lat"])),
+    }
+
+    # create and return interpolator model for the grid file
+    return RegularGridInterpolator(
+        (data["lon"], data["lat"]), data["ele"], bounds_error=True
+    )
+
+
+# load in map data binary files
+def load_dem_file(filepath):
+    """Load data from geospatial dat file.
+
+    Parameters
+    ----------
+    filepath : pathlib.Path
+        path to file
+
+    Returns
+    -------
+    dict containing the following:
+       "lat" 1D numpy array of latitude coordinates
+       "lon" 1D numpy array of longitude coordinates
+       "ele" 2D numpy array of elevations at lat/lon coordinates
+    """
+    # binary types for loading of gridded binary files
+    type_list = [
+        ("lat_min", "f"),
+        ("lat_max", "f"),
+        ("num_lat", "f"),
+        ("lon_min", "f"),
+        ("lon_max", "f"),
+        ("num_lon", "f"),
+    ]
+    # type_list = [(lat_min,"d"),(num_lat,"H"), etc] + omit last grid type
+    temp = {}
+    with open(filepath, "rb") as f:
+        for field, field_type in type_list:
+            temp[field] = load_dat_file(f, field_type, 1)
+        map_data = load_dat_file(f, "H", int(temp["num_lat"]) * int(temp["num_lon"]))
+    data = {
+        "lat": np.linspace(temp["lat_min"], temp["lat_max"], int(temp["num_lat"])),
+        "lon": np.linspace(temp["lon_min"], temp["lon_max"], int(temp["num_lon"])),
+        "ele": np.reshape(map_data, (-1, int(temp["num_lat"]))),
     }
 
     # create and return interpolator model for the grid file

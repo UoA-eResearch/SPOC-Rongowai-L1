@@ -165,7 +165,7 @@ if __name__ == "__main__":
     settings = {
         "L1_L0_INPUT": "",
         "L1_L1_OUTPUT": "",
-        "L1_A_PHY_LUT": "",
+        # "L1_A_PHY_LUT": "",
         "L1_LANDMASK": "",
         "L1_DEM": "",
         "L1_DTU": "",
@@ -251,8 +251,7 @@ if __name__ == "__main__":
     pek_path = this_dir.joinpath(Path("../dat/pek/"))
     rng_path = this_dir.joinpath(Path("../dat/rng/"))
 
-    # scattering area LUT
-    L1_A_PHY_LUT = A_phy_LUT_path.joinpath(Path(settings["L1_A_PHY_LUT"]))
+    # L1_A_PHY_LUT = A_phy_LUT_path.joinpath(Path(settings["L1_A_PHY_LUT"]))
     # load ocean/land (distance to coast) mask
     L1_LANDMASK = landmask_path.joinpath(Path(settings["L1_LANDMASK"]))
     # load SRTM_30 DEM
@@ -291,7 +290,7 @@ if __name__ == "__main__":
         L1_SV_PRN,
         L1_SV_eirp,
         rng_filenames,
-        L1_A_PHY_LUT,
+        A_phy_LUT_path,
         orbit_path,
     )
 
