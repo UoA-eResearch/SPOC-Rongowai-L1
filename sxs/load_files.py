@@ -217,10 +217,12 @@ class input_files:
 
         # create the interpolation functions for the 3 ports
         self.L1a_cal_1dinterp = {}
+        # adjustments to LHCP and RHCP values - June 27th 2023
+        offsets = [0, -11.1, -14.4]
         for i in range(3):
             self.L1a_cal_1dinterp[i] = interp1d(
                 self.L1a_cal_ddm_counts_db[i, :],
-                self.L1a_cal_ddm_power_dbm[i, :],
+                self.L1a_cal_ddm_power_dbm[i, :] + offsets[i],
                 kind="cubic",
                 fill_value="extrapolate",
             )
@@ -366,7 +368,8 @@ def load_antenna_pattern(filepath):
     with open(filepath, "rb") as f:
         # The Matlab code does not use the azim_min, azim_max,
         # elev_max, elev_min, values so ignore them here
-        ignore_values = load_dat_file(f, "H", 5)
+        ignore_values = load_dat_file(f, "H", 4)
+        ignore_values = load_dat_file(f, "d", 1)
         ant_data = load_dat_file(f, "d", 3601 * 1201)
     return np.reshape(ant_data, (-1, 3601))
 
@@ -630,10 +633,10 @@ def load_dem_file(filepath):
     # binary types for loading of gridded binary files
     type_list = [
         ("lat_min", "f"),
-        ("lat_max", "f"),
+        ("lat_res", "f"),
         ("num_lat", "f"),
         ("lon_min", "f"),
-        ("lon_max", "f"),
+        ("lon_res", "f"),
         ("num_lon", "f"),
     ]
     # type_list = [(lat_min,"d"),(num_lat,"H"), etc] + omit last grid type
@@ -643,12 +646,14 @@ def load_dem_file(filepath):
             temp[field] = load_dat_file(f, field_type, 1)
         map_data = load_dat_file(f, "H", int(temp["num_lat"]) * int(temp["num_lon"]))
     data = {
-        "lat": np.linspace(temp["lat_min"], temp["lat_max"], int(temp["num_lat"])),
-        "lon": np.linspace(temp["lon_min"], temp["lon_max"], int(temp["num_lon"])),
+        # "lat": np.linspace(temp["lat_min"], temp["lat_max"], int(temp["num_lat"])),
+        # "lon": np.linspace(temp["lon_min"], temp["lon_max"], int(temp["num_lon"])),
+        "lat": np.arange(0, int(temp["num_lat"])) * temp["lat_res"] + temp["lat_min"],
+        "lon": np.arange(0, int(temp["num_lon"])) * temp["lon_res"] + temp["lon_min"],
         "ele": np.reshape(map_data, (-1, int(temp["num_lat"]))),
     }
-
+    return data
     # create and return interpolator model for the grid file
-    return RegularGridInterpolator(
-        (data["lon"], data["lat"]), data["ele"], bounds_error=True
-    )
+    # return RegularGridInterpolator(
+    #    (data["lon"], data["lat"]), data["ele"], bounds_error=True
+    # )
