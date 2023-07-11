@@ -166,6 +166,11 @@ class L0_file:
             x = np.arange(len(array))
             # indexes of non-zero values that we wish to interp
             idx = np.where(array != 0)[0]
+            # if all values are zero, just return the original array
+            # TODO not sure how this will handle sparse data...
+            # Nor how well the Matlab implementation would!
+            if not idx.any():
+                return array
             # set up interp function using non-zero indexes and values
             f = interp1d(x[idx], array[idx])
             # return interpolated values for 1D array of all indexes 0:len(array)
