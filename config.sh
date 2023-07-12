@@ -19,7 +19,7 @@ L1_DTU="dtu10_v1.dat"
 L1_SV_PRN="PRN_SV_LUT_v1.dat"
 L1_SV_eirp="GPS_SV_EIRP_Params_v7.dat"
 # ./dat/L1_Dict/
-L1_DICT="L1_Dict_v2_1m.xlsx"
+L1_DICT="L1_Dict_v2_3.xlsx"
 # ./dat/L1a_cal/
 L1a_CAL_COUNTS="L1A_cal_ddm_counts_dB_v1.dat"
 L1a_CAL_POWER="L1A_cal_ddm_power_dBm_v1.dat"

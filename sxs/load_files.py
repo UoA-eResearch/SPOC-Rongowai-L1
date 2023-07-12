@@ -284,16 +284,16 @@ class input_files:
             self.inc_angle_bins,
             self.az_angle_bins,
         ) = load_A_phy_LUT_inputs(A_PHY_LUT_INPUTS)
-        num_rx_alt = len(self.rx_alt_bins)
-        num_inc_angle = len(self.inc_angle_bins)
-        num_az_angle = len(self.az_angle_bins)
-        self.A_phy_LUT_all = {}
+        self.A_phy_LUT_all = []
         for filename, value in A_PHY_LUT_paths.items():
             A_PHY_LUT_DATA = A_phy_LUT_path.joinpath(Path(filename))
             LUT = load_A_phy_LUT(
-                A_PHY_LUT_DATA, num_rx_alt, num_inc_angle, num_az_angle
+                A_PHY_LUT_DATA,
+                self.rx_alt_bins,
+                self.inc_angle_bins,
+                self.az_angle_bins,
             )
-            self.A_phy_LUT_all[str(value)] = {"LUT": LUT, "sp_doppler_frac": value}
+            self.A_phy_LUT_all.append({"LUT": LUT, "sp_doppler_frac": value})
         # self.rx_alt_bins, self.A_phy_LUT_interp = load_A_phy_LUT(A_phy_LUT_path)
         # rx_alt_bins, inc_angle_bins, az_angle_bins, A_phy_LUT_all = load_A_phy_LUT(
         #    A_phy_LUT_path
@@ -410,7 +410,7 @@ def load_A_phy_LUT_inputs(filepath):
 
 
 # load antenna binary files
-def load_A_phy_LUT(filepath, num_rx_alt, num_inc_angle, num_az_angle):
+def load_A_phy_LUT(filepath, rx_alt_bins, inc_angle_bins, az_angle_bins):
     """This function retrieves A_phy LUT and the input matrices
 
     Parameters
@@ -423,6 +423,10 @@ def load_A_phy_LUT(filepath, num_rx_alt, num_inc_angle, num_az_angle):
     A_phy_LUT
     """
     with open(filepath, "rb") as f:
+        num_rx_alt = len(rx_alt_bins)
+        num_inc_angle = len(inc_angle_bins)
+        num_az_angle = len(az_angle_bins)
+
         A_phy_LUT = np.full([num_rx_alt, num_inc_angle, num_az_angle, 7, 41], np.nan)
 
         for m in range(num_rx_alt):
@@ -433,10 +437,9 @@ def load_A_phy_LUT(filepath, num_rx_alt, num_inc_angle, num_az_angle):
                     ).T  # uint32
                     A_phy_LUT[m, n, k] = data
 
-    # return rx_alt_bins, RegularGridInterpolator(
-    #    (rx_alt_bins, inc_angle_bins, az_angle_bins), A_phy_LUT_all, bounds_error=True
-    # )
-    return A_phy_LUT
+    return RegularGridInterpolator(
+        (rx_alt_bins, inc_angle_bins, az_angle_bins), A_phy_LUT, bounds_error=True
+    )
 
 
 def retrieve_and_extract_orbit_file(settings, gps_week, gps_filename, orbit_path):

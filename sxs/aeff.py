@@ -5,7 +5,7 @@ from scipy.signal import convolve2d
 from projections import ecef2lla
 
 
-def get_ddm_Aeff4(
+"""def get_ddm_Aeff4(
     rx_alt,
     inc_angle,
     az_angle,
@@ -42,6 +42,79 @@ def get_ddm_Aeff4(
     # shift 2: shift along doppler direction
     A_phy_shift2 = np.roll(A_phy_shift, 1, axis=0)
     A_phy_shift = (1 - sp_doppler_frac) * A_phy_shift + (sp_doppler_frac * A_phy_shift2)
+
+    # crop the A_phy_full to Rongowai 5*40 DDM size
+    delay_shift_bin = center_delay_bin - sp_delay_intg
+    doppler_shift_bin = center_doppler_bin - sp_doppler_intg
+
+    # Change from Matlab offsets to account for Matlab/Python indexing differences
+    A_phy = A_phy_shift[
+        int(doppler_shift_bin - 1) : int(doppler_shift_bin + 4),
+        int(delay_shift_bin - 1) : int(delay_shift_bin + 39),
+    ]
+
+    # convolution to A_eff
+    A_eff1 = convolve2d(A_phy, chi2.T)
+    A_eff = A_eff1[2:7, 20:60]  # cut suitable size for A_eff, 0-based index
+
+    return A_eff"""
+
+
+def get_ddm_Aeff5(
+    rx_alt,
+    inc_angle,
+    az_angle,
+    sp_delay_bin,
+    sp_doppler_bin,
+    chi2,
+    A_phy_LUT_all,
+):
+    # this is to construct effective scattering area from LUTs
+
+    # center delay and doppler bin for full DDM
+    # note: not to be used elsewhere
+    center_delay_bin = 40
+    center_doppler_bin = 5
+
+    # integer and fractional part of the SP bin
+    sp_delay_intg = np.floor(sp_delay_bin)
+    sp_delay_frac = sp_delay_bin - sp_delay_intg
+
+    sp_doppler_intg = np.round(sp_doppler_bin)
+    sp_doppler_frac = sp_doppler_bin - sp_doppler_intg
+
+    # index for the floating Doppler bin
+    # which LUT should be used for interploation
+    # no +1 due to 0/1-base index differences of Python/Matlab
+    k = int(np.floor((sp_doppler_frac + 0.5) / 0.1))  # +1
+
+    if sp_doppler_frac >= 0:
+        A_phy_LUT1 = A_phy_LUT_all[k]["LUT"]
+        A_phy_LUT2 = A_phy_LUT_all[k + 1]["LUT"]
+
+    else:
+        A_phy_LUT2 = A_phy_LUT_all[k]["LUT"]
+        A_phy_LUT1 = A_phy_LUT_all[k + 1]["LUT"]
+
+    # derive full scattering area from LUT
+    A_phy_full_1_1 = A_phy_LUT1((rx_alt, inc_angle, az_angle))
+    A_phy_full_2_1 = np.vstack((np.zeros((1, 41)), A_phy_full_1_1, np.zeros((1, 41))))
+    A_phy_full_1 = np.hstack((A_phy_full_2_1, np.zeros((9, 39))))
+
+    A_phy_full_1_2 = A_phy_LUT2((rx_alt, inc_angle, az_angle))
+    A_phy_full_2_2 = np.vstack((np.zeros((1, 41)), A_phy_full_1_2, np.zeros((1, 41))))
+    A_phy_full_2 = np.hstack((A_phy_full_2_2, np.zeros((9, 39))))
+
+    A_phy_full = (1 - sp_doppler_frac) * A_phy_full_1 + (sp_doppler_frac * A_phy_full_2)
+
+    # shift A_phy_full according to the floating SP bin
+    # shift 1: shift along delay direction
+    A_phy_shift = np.roll(A_phy_full, 1)
+    A_phy_shift = (1 - sp_delay_frac) * A_phy_full + (sp_delay_frac * A_phy_shift)
+
+    # shift 2: shift along doppler direction
+    # A_phy_shift2 = np.roll(A_phy_shift, 1, axis=0)
+    # A_phy_shift = (1 - sp_doppler_frac) * A_phy_shift + (sp_doppler_frac * A_phy_shift2)
 
     # crop the A_phy_full to Rongowai 5*40 DDM size
     delay_shift_bin = center_delay_bin - sp_delay_intg
@@ -254,14 +327,14 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
             if SP_cond and interp_cond and angle_cond:
                 # note that the A_eff1 is transposed due to shape inconsistencies
                 #  (40,5) vs (5,40)
-                A_eff1 = get_ddm_Aeff4(
+                A_eff1 = get_ddm_Aeff5(
                     rx_alt_corrected1,
                     inc_angle1,
                     az_angle1,
                     sp_delay_row1,
                     sp_doppler_col1,
                     chi2,
-                    inp.A_phy_LUT_interp,
+                    inp.A_phy_LUT_all,
                 ).T
 
                 # derive NBRCS - single theoretical SP bin
