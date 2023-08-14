@@ -49,6 +49,23 @@ class L1_file:
         self.postCal["mean_sea_surface_version"] = settings["MEAN_SEA_SURFACE_VERSION"]
         self.postCal["per_bin_ant_version"] = settings["PER_BIN_ANT_VERSION"]
 
+        self.postCal["conventions"] = settings["CONVENTIONS"]
+        self.postCal["title"] = settings["TITLE"]
+        self.postCal["history"] = settings["HISTORY"]
+        self.postCal["standard_name_vocabulary"] = settings["STANDARD_NAME_VOCABULARY"]
+        self.postCal["comment"] = settings["COMMENT"]
+        self.postCal["processing_level"] = settings["PROCESSING_LEVEL"]
+        self.postCal["creator_type"] = settings["CREATOR_TYPE"]
+        self.postCal["institution"] = settings["INSTITUTION"]
+        self.postCal["creator_name"] = settings["CREATOR_NAME"]
+        self.postCal["publisher_name"] = settings["PUBLISHER_NAME"]
+        self.postCal["publisher_email"] = settings["PUBLISHER_EMAIL"]
+        self.postCal["publisher_url"] = settings["PUBLISHER_URL"]
+        self.postCal["geospatial_lat_min"] = settings["GEOSPATIAL_LAT_MIN"]
+        self.postCal["geospatial_lat_max"] = settings["GEOSPATIAL_LAT_MAX"]
+        self.postCal["geospatial_lon_min"] = settings["GEOSPATIAL_LON_MIN"]
+        self.postCal["geospatial_lon_max"] = settings["GEOSPATIAL_LON_MAX"]
+
     def data_from_L0(self, L0):
         # initialise variables that are diretly taken from L0 file
         self.postCal["delay_resolution"] = L0.delay_bin_res  # unit in chips
@@ -66,7 +83,7 @@ class L1_file:
         self.postCal["ac_vel_z_pvt"] = L0.rx_vel_z_pvt
         self.postCal["ac_roll_pvt"] = L0.rx_roll_pvt
         self.postCal["ac_pitch_pvt"] = L0.rx_pitch_pvt
-        self.postCal["ac_yaw_pvt"] = L0.rx_yaw_pvt
+        self.postCal["ac_heading_pvt"] = L0.rx_heading_pvt
         self.postCal["rx_clk_bias_pvt"] = L0.rx_clk_bias_m_pvt
         self.postCal["rx_clk_drift_pvt"] = L0.rx_clk_drift_mps_pvt
         self.postCal["zenith_sig_i2q2"] = L0.zenith_i2q2
@@ -117,6 +134,8 @@ class L1_file:
         self.postCal["gps_tx_power_db_w"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["gps_ant_gain_db_i"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["static_gps_eirp"] = np.full([*L0.shape_2d], np.nan)
+        # L1a x-pol calibration flag - rename 22 July 2023
+        self.postCal["L1a_xpol_calibration_flag"] = np.full([*L0.shape_2d], np.nan)
 
         self.sx_rx_gain_copol = np.full([*L0.shape_2d], np.nan)
         self.sx_rx_gain_xpol = np.full([*L0.shape_2d], np.nan)
@@ -188,8 +207,8 @@ class L1_file:
         # interpolate rx roll/pitch/yaw onto new time grid
         self.rx_roll = interp_ddm(pvt_utc, L0.rx_roll_pvt, ddm_utc)
         self.rx_pitch = interp_ddm(pvt_utc, L0.rx_pitch_pvt, ddm_utc)
-        self.rx_yaw = interp_ddm(pvt_utc, L0.rx_yaw_pvt, ddm_utc)
-        self.rx_attitude = [self.rx_roll, self.rx_pitch, self.rx_yaw]
+        self.rx_heading = interp_ddm(pvt_utc, L0.rx_heading_pvt, ddm_utc)
+        self.rx_attitude = [self.rx_roll, self.rx_pitch, self.rx_heading]
         # interpolate bias+drift onto new time grid
         self.rx_clk_bias_m = interp_ddm(pvt_utc, L0.rx_clk_bias_m_pvt, ddm_utc)
         self.rx_clk_drift_mps = interp_ddm(pvt_utc, L0.rx_clk_drift_mps_pvt, ddm_utc)
@@ -273,7 +292,7 @@ class L1_file:
         self.postCal["sp_ngrx_delay_correction"] = self.sp_delay_error
         self.postCal["sp_ngrx_dopp_correction"] = self.sp_doppler_error
         self.postCal["ddm_snr_flag"] = self.snr_flag
-        self.postCal["sp_confidence_flag"] = self.confidence_flag
+        self.postCal["confidence_flag"] = self.confidence_flag
         self.postCal["surface_reflectivity_peak"] = self.sp_refl
         self.postCal["eff_scatter"] = self.A_eff
         self.postCal["ddm_nbrcs"] = self.nbrcs
@@ -289,7 +308,7 @@ class L1_file:
         self.postCal["ac_vel_z"] = self.rx_vel_z
         self.postCal["ac_roll"] = self.rx_attitude[0]
         self.postCal["ac_pitch"] = self.rx_attitude[1]
-        self.postCal["ac_yaw"] = self.rx_attitude[2]
+        self.postCal["ac_heading"] = self.rx_attitude[2]
         self.postCal["rx_clk_bias"] = self.rx_clk_bias_m
         self.postCal["rx_clk_drift"] = self.rx_clk_drift_mps
         self.postCal["ac_lat"] = self.rx_pos_lla[0]
@@ -336,8 +355,8 @@ class L1_file:
         self.peak_doppler_col = expand_to_RHCP(self.peak_doppler_col, J_2, J)
         self.sp_delay_row = expand_to_RHCP(self.sp_delay_row, J_2, J)
         self.sp_doppler_col = expand_to_RHCP(self.sp_doppler_col, J_2, J)
-        self.sp_delay_error = expand_to_RHCP(self.sp_delay_error, J_2, J)
-        self.sp_doppler_error = expand_to_RHCP(self.sp_doppler_error, J_2, J)
+        self.sp_delay_error = expand_to_RHCP(self.sp_delay_error, J_2, J)   # TODO: Check if this is correct
+        self.sp_doppler_error = expand_to_RHCP(self.sp_doppler_error, J_2, J)  # TODO: Check if this is correct
         self.postCal["zenith_code_phase"] = expand_to_RHCP(
             self.postCal["zenith_code_phase"], J_2, J
         )

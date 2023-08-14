@@ -636,7 +636,7 @@ def specular_calculations(
         rx_vel_xyz1 = np.array([rx_vel_x[sec], rx_vel_y[sec], rx_vel_z[sec]])
         # Euler angels are now in radians and yaw is resp. North
         # Hard-code of 0 due to alignment of antenna and craft
-        rx_attitude1 = np.array([rx_roll[sec], rx_pitch[sec], 0])  # rx_yaw[sec]])
+        rx_attitude1 = np.array([rx_roll[sec], rx_pitch[sec], 0])  # rx_heading[sec]])
         rx1 = {
             "rx_pos_xyz": rx_pos_xyz1,
             "rx_vel_xyz": rx_vel_xyz1,
@@ -663,10 +663,9 @@ def specular_calculations(
                 ]
             )
 
-            trans_id1 = L1.postCal["prn_code"][sec][ngrx_channel]
+            # trans_id1 = L1.postCal["prn_code"][sec][ngrx_channel]
             sv_num1 = L1.postCal["sv_num"][sec][ngrx_channel]
-
-            ddm_ant1 = L1.postCal["ddm_ant"][sec][ngrx_channel]
+            # ddm_ant1 = L1.postCal["ddm_ant"][sec][ngrx_channel]
 
             tx1 = {
                 "tx_pos_xyz": tx_pos_xyz1,
@@ -752,13 +751,30 @@ def specular_calculations(
                     ) = sp_related(tx1, rx1, sx_pos_xyz1, inp.SV_eirp_LUT)
 
                     # get values for deriving BRCS and reflectivity
-                    R_tsx1 = ranges1[0]
-                    R_rsx1 = ranges1[1]
-                    gps_eirp_watt1 = gps_rad1[2]
+                    # R_tsx1 = ranges1[0]
+                    # R_rsx1 = ranges1[1]
+                    # gps_eirp_watt1 = gps_rad1[2]
 
                     # get active antenna gain for LHCP and RHCP channels
                     sx_rx_gain_LHCP1 = get_sx_rx_gain(sx_angle_ant1, inp.LHCP_pattern)
                     sx_rx_gain_RHCP1 = get_sx_rx_gain(sx_angle_ant1, inp.RHCP_pattern)
+
+                    # determine L1a xpol calibration flag - 28 June
+                    sx_theta_body1 = sx_angle_body1[0]         # off-boresight angle
+
+                    # antenna x-pol gain ratio
+                    copol_ratio1 = sx_rx_gain_LHCP1[0]-sx_rx_gain_LHCP1[1]
+                    xpol_ratio1 = sx_rx_gain_RHCP1[1]-sx_rx_gain_RHCP1[0]
+
+                    if sx_theta_body1 <= 60 and copol_ratio1 >= 14:
+                        L1a_xpol_calibration_flag_copol1 = 0  # consistent with L1 dictionary
+                    else:
+                        L1a_xpol_calibration_flag_copol1 = 1
+
+                    if sx_theta_body1 <= 60 and xpol_ratio1 >= 14:
+                        L1a_xpol_confidence_flag_xpol1 = 0
+                    else:
+                        L1a_xpol_confidence_flag_xpol1 = 1
 
                     # save to variables
                     L1.postCal["sp_theta_body"][sec, ngrx_channel] = sx_angle_body1[0]
@@ -787,6 +803,10 @@ def specular_calculations(
                     L1.sx_rx_gain_xpol[sec, ngrx_channel] = sx_rx_gain_LHCP1[1]
                     # RHCP channel rx gain
                     L1.sx_rx_gain_xpol[sec, ngrx_channel + L0.J_2] = sx_rx_gain_RHCP1[0]
+
+                    # L1a xpol calibration flag - rename 22 July
+                    L1.postCal["L1a_xpol_calibration_flag"][sec, ngrx_channel] = L1a_xpol_calibration_flag_copol1
+                    L1.postCal["L1a_xpol_calibration_flag"][sec, ngrx_channel + L0.J_2] = L1a_xpol_confidence_flag_xpol1
 
     # expand to RHCP channels
     L1.expand_sp_arrays(L0.J_2, L0.J)

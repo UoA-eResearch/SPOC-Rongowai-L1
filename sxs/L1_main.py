@@ -13,9 +13,10 @@ from calibration import ddm_calibration
 from fresnel import fresnel_calculations
 from gps import calculate_satellite_orbits
 from load_files import L0_file, input_files
-from noise import noise_floor_prep, noise_floor
+from noise import noise_floor_prep, noise_floor, confidence_flag
 from quality_flags import quality_flag_calculations
 from specular import specular_calculations
+from coherence import coherence_detection
 from output import L1_file, write_netcdf
 
 
@@ -33,26 +34,7 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
     # and gets track ID
     calculate_satellite_orbits(settings, L0, L1, inp)
 
-    # Part 3: L1a calibration
-    # this part converts from raw counts to signal power in watts and complete
-    # L1a calibration
-    ddm_calibration(
-        inp,
-        L0.std_dev_rf1,
-        L0.std_dev_rf2,
-        L0.std_dev_rf3,
-        L0.J,
-        L1.postCal["prn_code"],
-        L0.raw_counts,
-        L0.rf_source,
-        L0.first_scale_factor,
-        L1.ddm_power_counts,
-        L1.power_analog,
-        L1.postCal["ddm_ant"],
-        L1.postCal["inst_gain"],
-    )
-
-    # Part 4A: SP solver and geometries
+    # Part 3A: SP solver and geometries
     specular_calculations(
         L0,
         L1,
@@ -67,7 +49,7 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
         L1.rx_pitch,
     )
 
-    # Part 3B and 3C: noise floor, SNR, confidence flag of the SP solved
+    # Part 3B: noise floor, SNR
     noise_floor_prep(
         L0,
         L1,
@@ -81,13 +63,41 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
     )
     noise_floor(L0, L1)
 
+    # Part 4: L1a calibration
+    # this part converts from raw counts to signal power in watts and complete
+    # L1a calibration
+    ddm_calibration(
+        inp,
+        L0,
+        L1
+        # L0.std_dev_rf1,
+        # L0.std_dev_rf2,
+        # L0.std_dev_rf3,
+        # L0.J,
+        # L1.postCal["prn_code"],
+        # L0.raw_counts,
+        # L0.rf_source,
+        # L0.first_scale_factor,
+        # L1.ddm_power_counts,
+        # L1.power_analog,
+        # L1.postCal["ddm_ant"],
+        # L1.postCal["inst_gain"],
+        # L1.postCal["ddm_noise_floor"]
+    )
+
+    # Part 3C: confidence flag of the SP solved
+    confidence_flag(L0, L1)
+
     # Part 5: Copol and xpol BRCS, reflectivity, peak reflectivity
     brcs_calculations(L0, L1)
 
     # Part 6: NBRCS and other related parameters
     aeff_and_nbrcs(L0, L1, inp, L1.rx_vel_x, L1.rx_vel_y, L1.rx_vel_z, L1.rx_pos_lla)
 
-    # Part 7: fresnel dimensions and cross Pol
+    # Part 7: coherence detection
+    coherence_detection(L0, L1, L1.rx_pos_lla)
+
+    # Part 8: fresnel dimensions and cross Pol
     fresnel_calculations(L0, L1, L1.rx_vel_x, L1.rx_vel_y, L1.rx_vel_z)
 
     # Quality Flags
@@ -96,7 +106,7 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
         L1,
         L1.rx_roll,
         L1.rx_pitch,
-        L1.rx_yaw,
+        L1.rx_heading,
         L1.postCal["ant_temp_nadir"],
         L1.postCal["add_range_to_sp"],
         L1.rx_pos_lla,
@@ -199,6 +209,22 @@ if __name__ == "__main__":
         "SURFACE_TYPE_VERSION": "",
         "MEAN_SEA_SURFACE_VERSION": "",
         "PER_BIN_ANT_VERSION": "",
+        "CONVENTIONS": "",
+        "TITLE": "",
+        "HISTORY": "",
+        "STANDARD_NAME_VOCABULARY": "",
+        "COMMENT": "",
+        "PROCESSING_LEVEL": "",
+        "CREATOR_TYPE": "",
+        "INSTITUTION": "",
+        "CREATOR_NAME": "",
+        "PUBLISHER_NAME": "",
+        "PUBLISHER_EMAIL": "",
+        "PUBLISHER_URL": "",
+        "GEOSPATIAL_LAT_MIN": "",
+        "GEOSPATIAL_LAT_MAX": "",
+        "GEOSPATIAL_LON_MIN": "",
+        "GEOSPATIAL_LON_MAX": "",
     }
 
     with open(conf_file) as f:

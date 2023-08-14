@@ -21,8 +21,8 @@ L1_SV_eirp="GPS_SV_EIRP_Params_v7.dat"
 # ./dat/L1_Dict/
 L1_DICT="L1_Dict_v2_3.xlsx"
 # ./dat/L1a_cal/
-L1a_CAL_COUNTS="L1A_cal_ddm_counts_dB_v1.dat"
-L1a_CAL_POWER="L1A_cal_ddm_power_dBm_v1.dat"
+L1a_CAL_COUNTS="L1A_cal_ddm_counts_v2.dat"
+L1a_CAL_POWER="L1A_cal_ddm_power_v2.dat"
 # ./dat/lcv/
 L1_LANDCOVER="lcv.png"
 # ./dat/orbits/
@@ -36,8 +36,8 @@ L1_RHCP_L="GNSS_RHCP_L_gain_db_i_v2.dat"
 L1_RHCP_R="GNSS_RHCP_R_gain_db_i_v2.dat"
 
 # Credentials for automated orbital retrieval via cddis.nasa.gov
-L1_CDDIS_USERNAME="USERNAME"
-L1_CDDIS_PASSWORD="PASSWORD"
+L1_CDDIS_USERNAME="user"
+L1_CDDIS_PASSWORD="123456"
 
 # ---------- L1 Metadata info ------------
 # default value
@@ -48,7 +48,7 @@ DDM_SOURCE=2
 DDM_TIME_TYPE_SELECTOR=1
 DEM_SOURCE="SRTM30-200m"
 # write algorithm and LUT versions
-L1_ALGORITHM_VERSION="2.2"
+L1_ALGORITHM_VERSION="2.3"
 L1_DATA_VERSION="2.3"
 L1A_SIG_LUT_VERSION="1"
 L1A_NOISE_LUT_VERSION="1"
@@ -62,3 +62,21 @@ LAND_MASK_VERSION="1"
 SURFACE_TYPE_VERSION="1"
 MEAN_SEA_SURFACE_VERSION="1"
 PER_BIN_ANT_VERSION="1"
+
+# global variables - update compliance results 30 June in MATLAB
+CONVENTIONS="CF-1.8, ACDD-1.3, ISO-8601"
+TITLE="Rongowai Level 1 Science Data Record Version 1.0"
+HISTORY="TBD"
+STANDARD_NAME_VOCABULARY="CF Standard Name Table v30"
+COMMENT="DDMs are calibrated into Power (Watts) and Bistatic Radar Cross Section (m^2)"
+PROCESSING_LEVEL="1"
+CREATOR_TYPE="institution"
+INSTITUTION="University of Auckland (UoA)"
+CREATOR_NAME="Rongowai Science Payloads Operations Centre"
+PUBLISHER_NAME="PO.DAAC"
+PUBLISHER_EMAIL="rongowai.auckland.ac.nz"
+PUBLISHER_URL="spoc.auckland.ac.nz"
+GEOSPATIAL_LAT_MIN="-48.034"
+GEOSPATIAL_LAT_MAX="-34.374"
+GEOSPATIAL_LON_MIN="165.319"
+GEOSPATIAL_LON_MAX="179.767"

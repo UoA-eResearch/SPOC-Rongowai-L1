@@ -42,7 +42,7 @@ def quality_flag_calculations(
     L1,
     rx_roll,
     rx_pitch,
-    rx_yaw,
+    rx_heading,
     ant_temp_nadir,
     add_range_to_sp,
     rx_pos_lla,
@@ -57,10 +57,10 @@ def quality_flag_calculations(
             # flag 1, 2 and 22  0-based indexing
             rx_roll1 = rx_roll[sec]
             rx_pitch1 = rx_pitch[sec]
-            rx_yaw1 = rx_yaw[sec]
+            rx_heading1 = rx_heading[sec]
 
             if (
-                (rx_roll1 >= 29) or (rx_pitch1 >= 9) or (rx_yaw1 >= 4)
+                (rx_roll1 >= 29) or (rx_pitch1 >= 9) or (rx_heading1 >= 4)
             ):  # 0-based indexing
                 quality_flag1_1[2] = 1
             else:
