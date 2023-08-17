@@ -107,7 +107,6 @@ def L1a_counts2watts2(inp, ddm_counts, ANZ_port, std_dev, noise_floor):
     binning_thres_ch = binning_thres[ANZ_port]
     std_dev_ch = mag_std_dev_ch ** 2
 
-    ddm_power = np.zeros(ddm_counts.shape)
     # evaluate ddm power in watts
     ddm_power = inp.L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts))
     ddm_power_watts = ddm_power * std_dev_ch / binning_thres_ch

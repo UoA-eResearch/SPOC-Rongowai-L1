@@ -98,7 +98,7 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
     coherence_detection(L0, L1, L1.rx_pos_lla)
 
     # Part 8: fresnel dimensions and cross Pol
-    fresnel_calculations(L0, L1, L1.rx_vel_x, L1.rx_vel_y, L1.rx_vel_z)
+    fresnel_calculations(L0, L1)
 
     # Quality Flags
     quality_flag_calculations(

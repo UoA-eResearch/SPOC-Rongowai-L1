@@ -75,7 +75,11 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     return fresnel_coeff, fresnel_axis, fresnel_orientation
 
 
-def fresnel_calculations(L0, L1, rx_pos_x, rx_pos_y, rx_pos_z):
+def fresnel_calculations(L0, L1):
+    rx_pos_x = L1.rx_pos_x
+    rx_pos_y = L1.rx_pos_y
+    rx_pos_z = L1.rx_pos_z
+
     for sec in range(L0.I):
         for ngrx_channel in range(L0.J):
             tx_pos_xyz1 = [
@@ -107,19 +111,16 @@ def fresnel_calculations(L0, L1, rx_pos_x, rx_pos_y, rx_pos_z):
                 L1.postCal["fresnel_coeff"][sec][ngrx_channel] = fresnel_coeff1
                 L1.postCal["fresnel_major"][sec][ngrx_channel] = fresnel_axis1[0]
                 L1.postCal["fresnel_minor"][sec][ngrx_channel] = fresnel_axis1[1]
-                L1.postCal["fresnel_orientation"][sec][
-                    ngrx_channel
-                ] = fresnel_orientation1
+                L1.postCal["fresnel_orientation"][sec][ngrx_channel] = fresnel_orientation1
 
             # Do this once here rather than another loop over Sec and L0.J_2
+            # Cross Pol
             if ngrx_channel < L0.J_2:
-                nbrcs_LHCP1 = L1.nbrcs[sec][ngrx_channel]
-                nbrcs_RHCP1 = L1.nbrcs[sec][ngrx_channel + L0.J_2]
+                nbrcs_LHCP1 = L1.postCal['ddm_nbrcs_v1'][sec][ngrx_channel]
+                nbrcs_RHCP1 = L1.postCal['ddm_nbrcs_v1'][sec][ngrx_channel + L0.J_2]
                 CP1 = nbrcs_LHCP1 / nbrcs_RHCP1
                 if CP1 > 0:
                     CP_db1 = power2db(CP1)
-                    L1.postCal["nbrcs_cross_pol"][sec][ngrx_channel] = CP_db1
+                    L1.postCal["nbrcs_cross_pol_v1"][sec][ngrx_channel] = CP_db1
 
-    L1.postCal["nbrcs_cross_pol"][:, L0.J_2 : L0.J] = L1.postCal["nbrcs_cross_pol"][
-        :, 0 : L0.J_2
-    ]
+    L1.postCal["nbrcs_cross_pol_v1"][:, L0.J_2: L0.J] = -1 * L1.postCal["nbrcs_cross_pol_v1"][:, 0: L0.J_2]

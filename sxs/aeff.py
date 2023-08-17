@@ -154,7 +154,8 @@ def get_ddma_v1(brcs_copol, brcs_xpol, A_eff, sp_delay_row, sp_doppler_col):
     A_eff_ddma
     """
     delay_intg = math.floor(sp_delay_row)
-    delay_frac = sp_delay_row - math.floor(sp_delay_row)
+    delay_frac = sp_delay_row - math.floor(sp_delay_row)  # TODO: very different from Matlab,
+    # TODO: due to sp_delay_row in noise.noise_floor_prep function has a large deviation with Matlab
 
     doppler_intg = round(sp_doppler_col)
     doppler_frac = sp_doppler_col - round(sp_doppler_col)
@@ -531,10 +532,10 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
         L0.delay_bin_res,
         L0.doppler_bin_res,
     )  # 0-based
-    nbrcs_copol1_v1 = np.zeros([L0.I, L0.J_2])
-    nbrcs_xpol1_v1 = np.zeros([L0.I, L0.J_2])
-    nbrcs_scatter_area_v1 = np.zeros([L0.I, L0.J])
-    # nbrcs_scatter_area_v2 = np.zeros([L0.I, L0.J_2])
+    nbrcs_copol1_v1 = np.full([L0.I, L0.J_2], np.nan)
+    nbrcs_xpol1_v1 = np.full([L0.I, L0.J_2], np.nan)
+    nbrcs_scatter_area_v1 = np.full([L0.I, L0.J], np.nan)
+    # nbrcs_scatter_area_v1 = np.full([L0.I, L0.J], np.nan)
     # iterate over each second of flight
     for sec in range(L0.I):
         # retrieve velocities and altitdues

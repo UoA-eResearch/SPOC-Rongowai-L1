@@ -175,7 +175,7 @@ class L1_file:
         self.postCal["fresnel_minor"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["fresnel_major"] = np.full([*L0.shape_2d], np.nan)
         self.postCal["fresnel_orientation"] = np.full([*L0.shape_2d], np.nan)
-        self.postCal["nbrcs_cross_pol"] = np.full([*L0.shape_2d], np.nan)
+        self.postCal["nbrcs_cross_pol_v1"] = np.full([*L0.shape_2d], np.nan)
 
         self.postCal["quality_flags1"] = np.full([*L0.shape_2d], np.nan)
 
@@ -355,8 +355,8 @@ class L1_file:
         self.peak_doppler_col = expand_to_RHCP(self.peak_doppler_col, J_2, J)
         self.sp_delay_row = expand_to_RHCP(self.sp_delay_row, J_2, J)
         self.sp_doppler_col = expand_to_RHCP(self.sp_doppler_col, J_2, J)
-        self.sp_delay_error = expand_to_RHCP(self.sp_delay_error, J_2, J)   # TODO: Check if this is correct
-        self.sp_doppler_error = expand_to_RHCP(self.sp_doppler_error, J_2, J)  # TODO: Check if this is correct
+        self.sp_delay_error = expand_to_RHCP(self.sp_delay_error, J_2, J)
+        self.sp_doppler_error = expand_to_RHCP(self.sp_doppler_error, J_2, J)
         self.postCal["zenith_code_phase"] = expand_to_RHCP(
             self.postCal["zenith_code_phase"], J_2, J
         )

@@ -197,7 +197,7 @@ def noise_floor_prep(
                 ]  # 0-based index
                 L1.peak_doppler_col[sec][ngrx_channel] = peak_doppler_col1[0]
 
-                L1.sp_delay_row[sec][ngrx_channel] = sp_delay_row1  # TODO: very different from MATLAB
+                L1.sp_delay_row[sec][ngrx_channel] = sp_delay_row1
                 L1.sp_delay_error[sec][ngrx_channel] = d_delay_chips1  # TODO: very different from MATLAB
 
                 L1.sp_doppler_col[sec][ngrx_channel] = sp_doppler_col1
@@ -229,8 +229,8 @@ def noise_floor(L0, L1):
     )
 
     # noise floor is the median of the average counts
-    noise_floor_LHCP = np.nanmedian(L1.noise_floor_all_LHCP[valid_idx])
-    noise_floor_RHCP = np.nanmedian(L1.noise_floor_all_RHCP[valid_idx])
+    noise_floor_LHCP = np.nanmedian(L1.noise_floor_all_LHCP[valid_idx])  # P 62329455.44 vs 62197917.7600000 M # TODO: is this correct?
+    noise_floor_RHCP = np.nanmedian(L1.noise_floor_all_RHCP[valid_idx])  # P 60697598.24 vs 60603676.9600000 M
 
     # SNR of SP
     # flag 0 for signal < 0
