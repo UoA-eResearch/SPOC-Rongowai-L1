@@ -9,7 +9,7 @@ import pymap3d as pm
 import pyproj
 from scipy import constants
 
-from utils import get_local_dem, get_surf_type2
+from utils import get_local_dem, get_surf_type2, timeit
 from projections import ecef2lla, lla2ecef
 
 
@@ -615,6 +615,7 @@ def sp_related(tx, rx, sx_pos_xyz, SV_eirp_LUT):
     return sp_angle_body, sp_angle_enu, sp_angle_ant, theta_gps, range, gps_rad
 
 
+@timeit
 def specular_calculations(
     L0,
     L1,

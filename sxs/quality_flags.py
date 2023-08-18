@@ -3,6 +3,7 @@ import numpy as np
 
 from calibration import db2power
 from noise import meter2chips, delay_correction
+from utils import timeit
 
 
 def get_quality_flag(quality_flag1):
@@ -33,6 +34,7 @@ def get_quality_flag(quality_flag1):
     return quality_flag
 
 
+@timeit
 def quality_flag_calculations(
     L0,
     L1,

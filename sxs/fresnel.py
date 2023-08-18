@@ -6,6 +6,7 @@ from scipy import constants
 
 from calibration import power2db
 from projections import ecef2lla
+from utils import timeit
 
 
 def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, ddm_ant):
@@ -75,6 +76,7 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     return fresnel_coeff, fresnel_axis, fresnel_orientation
 
 
+@timeit
 def fresnel_calculations(L0, L1):
     rx_pos_x = L1.rx_pos_x
     rx_pos_y = L1.rx_pos_y

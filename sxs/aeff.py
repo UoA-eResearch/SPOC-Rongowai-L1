@@ -3,6 +3,7 @@ import numpy as np
 from scipy.signal import convolve2d
 
 from projections import ecef2lla
+from utils import timeit
 
 
 """def get_ddm_Aeff4(
@@ -229,6 +230,7 @@ def get_ddma_v1(brcs_copol, brcs_xpol, A_eff, sp_delay_row, sp_doppler_col):
 
 def get_ddma_v2(brcs_copol, brcs_xpol, A_eff, sp_delay_row, sp_doppler_col):
     """
+    TODO: not debugged yet
     this function gets the brcs and A_eff within ddma region - 3*3 bin
 
     Parameters
@@ -396,7 +398,6 @@ def get_ddma_v2(brcs_copol, brcs_xpol, A_eff, sp_delay_row, sp_doppler_col):
     return brcs_copol_ddma, brcs_xpol_ddma, A_eff_ddma
 
 
-
 def get_amb_fun(dtau_s, dfreq_Hz, tau_c, Ti):
     """
     this function computes the ambiguity function
@@ -521,6 +522,7 @@ def get_chi2(
     return chi2
 
 
+@timeit
 def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
     # derive amb-function (chi2) to be used in computing A_eff
     # % Matlab corrects delay/Doppler index by adding +1, Python doesn't
@@ -567,7 +569,7 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
                 L1.postCal["sp_pos_y"][sec][ngrx_channel],
                 L1.postCal["sp_pos_z"][sec][ngrx_channel],
             ]
-            sx_lla1 = ecef2lla.transform(*sx_pos_xyz1, radians=False)
+            sx_lla1 = ecef2lla.transform(*sx_pos_xyz1, radians=False)  # TODO: alt large deviation with MATLAB
 
             # 2nd input of A_eff
             rx_alt_corrected1 = rx_alt1 - sx_lla1[2]
@@ -603,6 +605,8 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
                     chi2,
                     inp.A_phy_LUT_all,
                 ).T
+
+                L1.A_eff[sec][ngrx_channel] = A_eff1  # TODO: confirm MATLAB code, A_eff1 is not assigned to A_eff
 
                 # nbrcs for SP bin
                 brcs_copol_ddma1, brcs_xpol_ddma1, A_eff_ddma1 = get_ddma_v1(

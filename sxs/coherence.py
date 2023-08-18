@@ -2,6 +2,7 @@ import math
 import cmath
 import numpy as np
 from scipy.interpolate import interp1d
+from utils import timeit
 
 
 def rongowaiWAF(doppler_center, delay_center, dim, delay_axis_chips):
@@ -143,6 +144,7 @@ def get_RongowaiWAFRMSD(ddm,
     return outputs
 
 
+@timeit
 def coherence_detection(L0, L1, rx_pos_lla):
     """
     coherence detection

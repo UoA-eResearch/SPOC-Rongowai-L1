@@ -1,6 +1,7 @@
 import numpy as np
 import math
 from scipy.interpolate import interp1d
+from utils import timeit
 
 # ignore divide by zero in log10
 np.seterr(divide="ignore")
@@ -108,11 +109,14 @@ def L1a_counts2watts2(inp, ddm_counts, ANZ_port, std_dev, noise_floor):
     std_dev_ch = mag_std_dev_ch ** 2
 
     # evaluate ddm power in watts
-    ddm_power = inp.L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts))
+    # ddm_power = inp.L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts))
+    f = interp1d(ddm_counts_ch, ddm_power_ch, kind="cubic", fill_value="extrapolate")
+    ddm_power = f(np.ma.getdata(ddm_counts))
     ddm_power_watts = ddm_power * std_dev_ch / binning_thres_ch
     return ddm_power_watts
 
 
+@timeit
 def ddm_calibration(
     inp,
     L0,
@@ -246,7 +250,5 @@ def ddm_calibration(
 
     L1.postCal["L1a_power_calibration_flag"] = L1a_power_calibration_flag
     L1.postCal["L1a_power_ddm"] = power_analog
-    # TODO: why it's here in MATLAB?
-    # L1.postCal["zenith_sig_i2q2"] = zenith_i2q2
     L1.postCal["inst_gain"] = inst_gain
     L1.postCal["ddm_ant"] = ddm_ant

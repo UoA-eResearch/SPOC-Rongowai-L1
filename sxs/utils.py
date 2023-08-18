@@ -2,6 +2,7 @@ import math
 import numpy as np
 from rasterio.windows import Window
 from scipy.interpolate import interp1d
+from datetime import datetime
 
 # L = 18030
 # grid_res = 30  # L may need to be updated in the future
@@ -12,6 +13,17 @@ LOCAL_DEM_RES = 30
 LOCAL_DEM_MARGIN = 0
 LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
 LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
+
+
+def timeit(f):
+    """timer decorator"""
+    def wrapper(*args, **kwargs):
+        start = datetime.now()
+        result = f(*args, **kwargs)
+        span = datetime.now() - start
+        print(f"{f.__name__}: runtime {span}")
+        return result
+    return wrapper
 
 
 def expand_to_RHCP(array, J_2, J):

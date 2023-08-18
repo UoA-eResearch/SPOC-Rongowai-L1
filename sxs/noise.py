@@ -2,7 +2,7 @@ import numpy as np
 from scipy import constants
 
 from calibration import power2db
-from utils import expand_to_RHCP
+from utils import expand_to_RHCP, timeit
 
 
 def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
@@ -76,6 +76,7 @@ def delay_correction(delay_chips_in, P):
     return delay_chips_out
 
 
+@timeit
 def noise_floor_prep(
     L0,
     L1,
@@ -216,6 +217,7 @@ def noise_floor_prep(
     L1.expand_noise_arrays(L0.J_2, L0.J)
 
 
+@timeit
 def noise_floor(L0, L1):
     sp_safe_margin = 9  # safe space between SP and DDM end
 
@@ -280,6 +282,7 @@ def noise_floor(L0, L1):
     L1.postCal["ddm_snr_flag"] = L1.snr_flag
 
 
+@timeit
 def confidence_flag(L0, L1):
     for ngrx_channel in range(L0.J_2):
         for sec in range(L0.I):
