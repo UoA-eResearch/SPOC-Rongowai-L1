@@ -607,14 +607,14 @@ def load_dat_file_grid(filepath):
             temp[field] = load_dat_file(f, field_type, 1)
         map_data = load_dat_file(f, "d", temp["num_lat"] * temp["num_lon"])
     data = {
-        "lat": np.linspace(temp["lat_min"], temp["lat_max"], temp["num_lat"]),
+        "lat": np.linspace(temp["lat_max"], temp["lat_min"], temp["num_lat"]),
         "lon": np.linspace(temp["lon_min"], temp["lon_max"], temp["num_lon"]),
-        "ele": np.reshape(map_data, (-1, temp["num_lat"])),
+        "ele": np.rot90(np.reshape(map_data, (-1, temp["num_lat"])), 1),
     }
 
     # create and return interpolator model for the grid file
     return RegularGridInterpolator(
-        (data["lon"], data["lat"]), data["ele"], bounds_error=True
+        (data["lat"], data["lon"]), data["ele"], bounds_error=True
     )
 
 
@@ -654,7 +654,7 @@ def load_dem_file(filepath):
         # "lon": np.linspace(temp["lon_min"], temp["lon_max"], int(temp["num_lon"])),
         "lat": np.arange(0, int(temp["num_lat"])) * temp["lat_res"] + temp["lat_min"],
         "lon": np.arange(0, int(temp["num_lon"])) * temp["lon_res"] + temp["lon_min"],
-        "ele": np.reshape(map_data, (-1, int(temp["num_lat"]))),
+        "ele": np.reshape(map_data, (-1, int(temp["num_lat"]))).T,
     }
     return data
     # create and return interpolator model for the grid file
