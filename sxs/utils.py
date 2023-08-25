@@ -68,8 +68,8 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
     else:
         local_ele = dtu10(
             (
-                np.tile(local_lon, LOCAL_NUM_PIXELS),
-                np.repeat(local_lat, LOCAL_NUM_PIXELS),
+                np.tile(local_lat, LOCAL_NUM_PIXELS),
+                np.repeat(local_lon, LOCAL_NUM_PIXELS)
             )
         ).reshape(-1, LOCAL_NUM_PIXELS)
 
@@ -97,7 +97,7 @@ def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
     # water_mask1 = water_mask[file_id]
     pek_value = get_pek_value(P[0], P[1], water_mask[file_id])
 
-    dist_coast = cst_mask((P[1], P[0]))
+    dist_coast = cst_mask((P[0], P[1]))
 
     if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
         surface_type = 3  # not consistent with matlab code

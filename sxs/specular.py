@@ -198,7 +198,7 @@ def finetune(tx_xyz, rx_xyz, sx_lla, L, model):
     for sp_val in sx_lla:
         sp_temp.append(sp_val)
     lat_bin, lon_bin, lat_bin_v, lon_bin_v = finetune_p1(sp_temp, L)
-    ele = model((lon_bin_v, lat_bin_v))
+    ele = model((lat_bin_v, lon_bin_v))
     p_x, p_y, p_z = lla2ecef.transform(*[lon_bin_v, lat_bin_v, ele], radians=False)
     p_xyz = np.array([p_x, p_y, p_z])
     min_delay, m_i, n_i, ele = finetune_p2(p_x, p_xyz, tx_xyz, rx_xyz, ele)
@@ -324,7 +324,7 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     )
     # sx_pos_xyz = lla2ecef.transform(*sx_pos_lla, radians=False)
     # replaces get_map_value function
-    dist = dist_to_coast_nz((sx_pos_lla[1], sx_pos_lla[0]))
+    dist = dist_to_coast_nz((sx_pos_lla[0], sx_pos_lla[1]))
     # dist = get_map_value(sx_pos_lla[0], sx_pos_lla[1], dist_to_coast_nz)
 
     local_dem = get_local_dem(sx_pos_lla, dem, dtu10, dist)

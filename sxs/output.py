@@ -236,7 +236,7 @@ class L1_file:
 
         # determine specular point "over land" flag from landmask
         # replaces get_map_value function
-        self.postCal["status_flags_one_hz"] = inp.landmask_nz((lon, lat))
+        self.postCal["status_flags_one_hz"] = inp.landmask_nz((lat, lon))
         self.postCal["status_flags_one_hz"][self.postCal["status_flags_one_hz"] > 0] = 5
         self.postCal["status_flags_one_hz"][
             self.postCal["status_flags_one_hz"] <= 0
@@ -296,8 +296,8 @@ class L1_file:
         self.postCal["surface_reflectivity_peak"] = self.sp_refl
         self.postCal["eff_scatter"] = self.A_eff
         self.postCal["ddm_nbrcs"] = self.nbrcs
-        self.postCal["coherence_metric"] = self.coherency_ratio
-        self.postCal["coherence_state"] = self.coherency_state
+        # self.postCal["coherence_metric"] = self.coherency_ratio
+        # self.postCal["coherence_state"] = self.coherency_state
         self.postCal["ddm_timestamp_gps_week"] = self.gps_week
         self.postCal["ddm_timestamp_gps_sec"] = self.gps_tow
         self.postCal["ac_pos_x"] = self.rx_pos_x
