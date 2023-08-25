@@ -81,7 +81,7 @@ def get_pek_value(lat, lon, water_mask):
     lat_index = math.ceil((water_mask["lat_max"] - lat) / water_mask["res_deg"]) - 1
     lon_index = math.ceil((lon - water_mask["lon_min"]) / water_mask["res_deg"]) - 1
 
-    data = water_mask["file"].read(1, window=Window(lat_index, lon_index, 1, 1))
+    data = water_mask["file"].read(1, window=Window(lon_index, lat_index, 1, 1))
     return data
 
 
