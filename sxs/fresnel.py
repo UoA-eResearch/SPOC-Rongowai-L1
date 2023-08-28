@@ -55,8 +55,10 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
     fresnel_coeff = np.nan
 
     if dist_to_coast <= 0:
-        sint = math.degrees(math.sin(math.radians(inc_angle)))
-        cost = math.degrees(math.cos(math.radians(inc_angle)))
+        # sint = math.degrees(math.sin(math.radians(inc_angle)))
+        # cost = math.degrees(math.cos(math.radians(inc_angle)))
+        sint = math.sin(math.radians(inc_angle))
+        cost = math.cos(math.radians(inc_angle))
 
         temp1 = cmath.sqrt(eps_ocean - sint * sint)
 
@@ -66,11 +68,10 @@ def get_fresnel(tx_pos_xyz, rx_pos_xyz, sx_pos_xyz, dist_to_coast, inc_angle, dd
         R_rl = (R_vv - R_hh) / 2
         R_rr = (R_vv + R_hh) / 2
 
-        # -1 offset due to Matlab/Python indexing difference
-        if ddm_ant == 1:
+        # ddm_ant is the same with MATLAB code due to `+1` in Python calibration code
+        if ddm_ant == 2:
             fresnel_coeff = abs(R_rl) * abs(R_rl)
-        # -1 offset due to Matlab/Python indexing difference
-        elif ddm_ant == 2:
+        elif ddm_ant == 3:
             fresnel_coeff = abs(R_rr) * abs(R_rr)
 
     return fresnel_coeff, fresnel_axis, fresnel_orientation
