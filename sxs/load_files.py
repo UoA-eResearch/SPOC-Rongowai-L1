@@ -53,7 +53,7 @@ class L0_file:
         # rx attitude, deg | TODO this is actually radians and will be updated
         self.rx_pitch_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_pitch_deg"])
         self.rx_roll_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_roll_deg"])
-        self.rx_yaw_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_yaw_deg"])
+        self.rx_heading_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_yaw_deg"])
         # rx clock bias and drifts
         self.rx_clk_bias_m_pvt = load_netcdf(ds["/geometry/receiver/rx_clock_bias_m"])
         self.rx_clk_drift_mps_pvt = load_netcdf(
@@ -149,7 +149,7 @@ class L0_file:
         self.rx_vel_z_pvt = self.rx_vel_z_pvt[idx_min:idx_max]
         self.rx_roll_pvt = self.rx_roll_pvt[idx_min:idx_max]
         self.rx_pitch_pvt = self.rx_pitch_pvt[idx_min:idx_max]
-        self.rx_yaw_pvt = self.rx_yaw_pvt[idx_min:idx_max]
+        self.rx_heading_pvt = self.rx_heading_pvt[idx_min:idx_max]
         self.rx_clk_bias_m_pvt = self.rx_clk_bias_m_pvt[idx_min:idx_max]
         self.rx_clk_drift_mps_pvt = self.rx_clk_drift_mps_pvt[idx_min:idx_max]
 
@@ -186,7 +186,7 @@ class L0_file:
         self.rx_vel_z_pvt = interp_funct(self.rx_vel_z_pvt)
         self.rx_roll_pvt = interp_funct(self.rx_roll_pvt)
         self.rx_pitch_pvt = interp_funct(self.rx_pitch_pvt)
-        self.rx_yaw_pvt = interp_funct(self.rx_yaw_pvt)
+        self.rx_heading_pvt = interp_funct(self.rx_heading_pvt)
         self.rx_clk_bias_m_pvt = interp_funct(self.rx_clk_bias_m_pvt)
         self.rx_clk_drift_mps_pvt = interp_funct(self.rx_clk_drift_mps_pvt)
 
@@ -198,8 +198,8 @@ class input_files:
 
     def __init__(
         self,
-        L1a_cal_ddm_counts_db_filename,
-        L1a_cal_ddm_power_dbm_filename,
+        L1a_cal_ddm_counts_filename,
+        L1a_cal_ddm_power_filename,
         dem_filename,
         dtu_filename,
         landmask_filename,
@@ -212,17 +212,18 @@ class input_files:
         A_phy_LUT_path,
         orbit_path,
     ):
-        self.L1a_cal_ddm_counts_db = np.loadtxt(L1a_cal_ddm_counts_db_filename)
-        self.L1a_cal_ddm_power_dbm = np.loadtxt(L1a_cal_ddm_power_dbm_filename)
+        self.L1a_cal_ddm_counts = np.loadtxt(L1a_cal_ddm_counts_filename)
+        self.L1a_cal_ddm_power = np.loadtxt(L1a_cal_ddm_power_filename)
 
         # create the interpolation functions for the 3 ports
         self.L1a_cal_1dinterp = {}
         # adjustments to LHCP and RHCP values - June 27th 2023
-        offsets = [0, -11.1, -14.4]
-        for i in range(3):
+        # offsets = [0, -11.1, -14.4]  # TODO: where do these come from?
+        offsets = [0, 0, 0]
+        for i in range(1, 3):  # 0 is all nan
             self.L1a_cal_1dinterp[i] = interp1d(
-                self.L1a_cal_ddm_counts_db[i, :],
-                self.L1a_cal_ddm_power_dbm[i, :] + offsets[i],
+                self.L1a_cal_ddm_counts[i, :],
+                self.L1a_cal_ddm_power[i, :] + offsets[i],
                 kind="cubic",
                 fill_value="extrapolate",
             )
@@ -606,14 +607,14 @@ def load_dat_file_grid(filepath):
             temp[field] = load_dat_file(f, field_type, 1)
         map_data = load_dat_file(f, "d", temp["num_lat"] * temp["num_lon"])
     data = {
-        "lat": np.linspace(temp["lat_min"], temp["lat_max"], temp["num_lat"]),
+        "lat": np.linspace(temp["lat_max"], temp["lat_min"], temp["num_lat"]),
         "lon": np.linspace(temp["lon_min"], temp["lon_max"], temp["num_lon"]),
-        "ele": np.reshape(map_data, (-1, temp["num_lat"])),
+        "ele": np.rot90(np.reshape(map_data, (-1, temp["num_lat"])), 1),
     }
 
     # create and return interpolator model for the grid file
     return RegularGridInterpolator(
-        (data["lon"], data["lat"]), data["ele"], bounds_error=True
+        (data["lat"], data["lon"]), data["ele"], bounds_error=True
     )
 
 
@@ -653,7 +654,7 @@ def load_dem_file(filepath):
         # "lon": np.linspace(temp["lon_min"], temp["lon_max"], int(temp["num_lon"])),
         "lat": np.arange(0, int(temp["num_lat"])) * temp["lat_res"] + temp["lat_min"],
         "lon": np.arange(0, int(temp["num_lon"])) * temp["lon_res"] + temp["lon_min"],
-        "ele": np.reshape(map_data, (-1, int(temp["num_lat"]))),
+        "ele": np.reshape(map_data, (-1, int(temp["num_lat"]))).T,
     }
     return data
     # create and return interpolator model for the grid file

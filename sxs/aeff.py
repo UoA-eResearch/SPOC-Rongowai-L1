@@ -3,6 +3,7 @@ import numpy as np
 from scipy.signal import convolve2d
 
 from projections import ecef2lla
+from utils import timeit
 
 
 """def get_ddm_Aeff4(
@@ -97,10 +98,12 @@ def get_ddm_Aeff5(
         A_phy_LUT1 = A_phy_LUT_all[k + 1]["LUT"]
 
     # derive full scattering area from LUT
+    # TODO: 3D interpolation not implemented correctly? large difference with Matlab
     A_phy_full_1_1 = A_phy_LUT1((rx_alt, inc_angle, az_angle))
     A_phy_full_2_1 = np.vstack((np.zeros((1, 41)), A_phy_full_1_1, np.zeros((1, 41))))
     A_phy_full_1 = np.hstack((A_phy_full_2_1, np.zeros((9, 39))))
 
+    # TODO: 3D interpolation not implemented correctly? large difference with Matlab
     A_phy_full_1_2 = A_phy_LUT2((rx_alt, inc_angle, az_angle))
     A_phy_full_2_2 = np.vstack((np.zeros((1, 41)), A_phy_full_1_2, np.zeros((1, 41))))
     A_phy_full_2 = np.hstack((A_phy_full_2_2, np.zeros((9, 39))))
@@ -131,6 +134,268 @@ def get_ddm_Aeff5(
     A_eff = A_eff1[2:7, 20:60]  # cut suitable size for A_eff, 0-based index
 
     return A_eff
+
+
+def get_ddma_v1(brcs_copol, brcs_xpol, A_eff, sp_delay_row, sp_doppler_col):
+    """
+    this function gets the brcs and A_eff within ddma region - SP bin
+
+    Parameters
+    ----------
+    brcs_copol
+    brcs_xpol
+    A_eff
+    sp_delay_row
+    sp_doppler_col
+
+    Returns
+    -------
+    brcs_copol_ddma
+    brcs_xpol_ddma
+    A_eff_ddma
+    """
+    delay_intg = math.floor(sp_delay_row)
+    delay_frac = sp_delay_row - math.floor(sp_delay_row)  # TODO: very different from Matlab,
+    # TODO: due to sp_delay_row in noise.noise_floor_prep function has a large deviation with Matlab
+
+    doppler_intg = round(sp_doppler_col)
+    doppler_frac = sp_doppler_col - round(sp_doppler_col)
+
+    # NBRCS SP bin
+    if doppler_frac >= 0:
+
+        if doppler_intg <= 3:
+            brcs_copol_ddma = (
+                    (1 - doppler_frac) * (1 - delay_frac) * brcs_copol[delay_intg, doppler_intg] +
+                    (1 - doppler_frac) * delay_frac * brcs_copol[delay_intg + 1, doppler_intg] +
+                    doppler_frac * (1 - delay_frac) * brcs_copol[delay_intg, doppler_intg + 1] +
+                    doppler_frac * delay_frac * brcs_copol[delay_intg + 1, doppler_intg + 1]
+            )
+            brcs_xpol_ddma = (
+                    (1 - doppler_frac) * (1 - delay_frac) * brcs_xpol[delay_intg, doppler_intg] +
+                    (1 - doppler_frac) * delay_frac * brcs_xpol[delay_intg + 1, doppler_intg] +
+                    doppler_frac * (1 - delay_frac) * brcs_xpol[delay_intg, doppler_intg + 1] +
+                    doppler_frac * delay_frac * brcs_xpol[delay_intg + 1, doppler_intg + 1]
+            )
+            A_eff_ddma = (
+                    (1 - doppler_frac) * (1 - delay_frac) * A_eff[delay_intg, doppler_intg] +
+                    (1 - doppler_frac) * delay_frac * A_eff[delay_intg + 1, doppler_intg] +
+                    doppler_frac * (1 - delay_frac) * A_eff[delay_intg, doppler_intg + 1] +
+                    doppler_frac * delay_frac * A_eff[delay_intg + 1, doppler_intg + 1]
+            )
+
+        elif doppler_intg > 3:
+
+            brcs_copol_ddma = ((1 - delay_frac) * brcs_copol[delay_intg, doppler_intg] +
+                               delay_frac * brcs_copol[delay_intg + 1, doppler_intg])
+
+            brcs_xpol_ddma = ((1 - delay_frac) * brcs_xpol[delay_intg, doppler_intg] +
+                              delay_frac * brcs_xpol[delay_intg + 1, doppler_intg])
+
+            A_eff_ddma = ((1 - delay_frac) * A_eff[delay_intg, doppler_intg] +
+                          delay_frac * A_eff[delay_intg + 1, doppler_intg])
+
+    elif doppler_frac < 0:
+
+        if doppler_intg >= 1:
+
+            brcs_copol_ddma = ((1 - abs(doppler_frac)) * (1 - delay_frac) * brcs_copol[delay_intg, doppler_intg] +
+                               (1 - abs(doppler_frac)) * delay_frac * brcs_copol[delay_intg + 1, doppler_intg] +
+                               abs(doppler_frac) * (1 - delay_frac) * brcs_copol[delay_intg, doppler_intg - 1] +
+                               abs(doppler_frac) * delay_frac * brcs_copol[delay_intg + 1, doppler_intg - 1])
+
+            brcs_xpol_ddma = ((1 - abs(doppler_frac)) * (1 - delay_frac) * brcs_xpol[delay_intg, doppler_intg] +
+                              (1 - abs(doppler_frac)) * delay_frac * brcs_xpol[delay_intg + 1, doppler_intg] +
+                              abs(doppler_frac) * (1 - delay_frac) * brcs_xpol[delay_intg, doppler_intg - 1] +
+                              abs(doppler_frac) * delay_frac * brcs_xpol[delay_intg + 1, doppler_intg - 1])
+
+            A_eff_ddma = ((1 - abs(doppler_frac)) * (1 - delay_frac) * A_eff[delay_intg, doppler_intg] +
+                          (1 - abs(doppler_frac)) * delay_frac * A_eff[delay_intg + 1, doppler_intg] +
+                          abs(doppler_frac) * (1 - delay_frac) * A_eff[delay_intg, doppler_intg - 1] +
+                          abs(doppler_frac) * delay_frac * A_eff[delay_intg + 1, doppler_intg - 1])
+
+        elif doppler_intg < 1:
+
+            brcs_copol_ddma = ((1 - delay_frac) * brcs_copol[delay_intg, doppler_intg] +
+                               delay_frac * brcs_copol[delay_intg + 1, doppler_intg])
+
+            brcs_xpol_ddma = ((1 - delay_frac) * brcs_xpol[delay_intg, doppler_intg] +
+                              delay_frac * brcs_xpol[delay_intg + 1, doppler_intg])
+
+            A_eff_ddma = ((1 - delay_frac) * A_eff[delay_intg, doppler_intg] +
+                          delay_frac * A_eff[delay_intg + 1, doppler_intg])
+
+    return brcs_copol_ddma, brcs_xpol_ddma, A_eff_ddma
+
+
+def get_ddma_v2(brcs_copol, brcs_xpol, A_eff, sp_delay_row, sp_doppler_col):
+    """
+    TODO: not debugged yet
+    this function gets the brcs and A_eff within ddma region - 3*3 bin
+
+    Parameters
+    ----------
+    brcs_copol
+    brcs_xpol
+    A_eff
+    sp_delay_row
+    sp_doppler_col
+
+    Returns
+    -------
+    brcs_copol_ddma
+    brcs_xpol_ddma
+    A_eff_ddma
+    """
+
+    delay_intg = math.floor(sp_delay_row)
+    delay_frac = sp_delay_row - math.floor(sp_delay_row)
+
+    doppler_intg = round(sp_doppler_col)
+    doppler_frac = sp_doppler_col - round(sp_doppler_col)
+
+    if delay_intg >= 2:
+        delay_range = range(delay_intg - 2, delay_intg + 2)
+    elif delay_intg < 2:
+        delay_range = range(1, 5)
+
+    if doppler_frac >= 0:
+
+        if doppler_intg < 3 and doppler_intg >= 1:
+            doppler_range = range(doppler_intg - 1, doppler_intg + 3)
+
+        elif doppler_intg >= 3:
+            doppler_range = range(2, 6)
+
+        elif doppler_intg < 1:
+            doppler_range = range(1, 5)
+
+        brcs_copol_ddma = (
+                (1 - delay_frac) * (1 - doppler_frac) * brcs_copol[delay_range[0], doppler_range[0]] +
+                (1 - delay_frac) * brcs_copol[delay_range[0], doppler_range[1]] +
+                (1 - delay_frac) * brcs_copol[delay_range[0], doppler_range[2]] +
+                (1 - delay_frac) * doppler_frac * brcs_copol[delay_range[0], doppler_range[3]] +
+                (1 - doppler_frac) * brcs_copol[delay_range[1], doppler_range[0]] +
+                brcs_copol[delay_range[1], doppler_range[1]] +
+                brcs_copol[delay_range[1], doppler_range[2]] +
+                doppler_frac * brcs_copol[delay_range[1], doppler_range[3]] +
+                (1 - doppler_frac) * brcs_copol[delay_range[2], doppler_range[0]] +
+                brcs_copol[delay_range[2], doppler_range[1]] +
+                brcs_copol[delay_range[2], doppler_range[2]] +
+                doppler_frac * brcs_copol[delay_range[2], doppler_range[3]] +
+                (1 - doppler_frac) * delay_frac * brcs_copol[delay_range[3], doppler_range[0]] +
+                delay_frac * brcs_copol[delay_range[3], doppler_range[1]] +
+                delay_frac * brcs_copol[delay_range[3], doppler_range[2]] +
+                delay_frac * doppler_frac * brcs_copol[delay_range[3], doppler_range[3]]
+        )
+
+        brcs_xpol_ddma = (
+                (1 - delay_frac) * (1 - doppler_frac) * brcs_xpol[delay_range[0], doppler_range[0]] +
+                (1 - delay_frac) * brcs_xpol[delay_range[0], doppler_range[1]] +
+                (1 - delay_frac) * brcs_xpol[delay_range[0], doppler_range[2]] +
+                (1 - delay_frac) * doppler_frac * brcs_xpol[delay_range[0], doppler_range[3]] +
+                (1 - doppler_frac) * brcs_xpol[delay_range[1], doppler_range[0]] +
+                brcs_xpol[delay_range[1], doppler_range[1]] +
+                brcs_xpol[delay_range[1], doppler_range[2]] +
+                doppler_frac * brcs_xpol[delay_range[1], doppler_range[3]] +
+                (1 - doppler_frac) * brcs_xpol[delay_range[2], doppler_range[0]] +
+                brcs_xpol[delay_range[2], doppler_range[1]] +
+                brcs_xpol[delay_range[2], doppler_range[2]] +
+                doppler_frac * brcs_xpol[delay_range[2], doppler_range[3]] +
+                (1 - doppler_frac) * delay_frac * brcs_xpol[delay_range[3], doppler_range[0]] +
+                delay_frac * brcs_xpol[delay_range[3], doppler_range[1]] +
+                delay_frac * brcs_xpol[delay_range[3], doppler_range[2]] +
+                delay_frac * doppler_frac * brcs_xpol[delay_range[3], doppler_range[3]]
+        )
+
+        A_eff_ddma = (
+                (1 - delay_frac) * (1 - doppler_frac) * A_eff[delay_range[0], doppler_range[0]] +
+                (1 - delay_frac) * A_eff[delay_range[0], doppler_range[1]] +
+                (1 - delay_frac) * A_eff[delay_range[0], doppler_range[2]] +
+                (1 - delay_frac) * doppler_frac * A_eff[delay_range[0], doppler_range[3]] +
+                (1 - doppler_frac) * A_eff[delay_range[1], doppler_range[0]] +
+                A_eff[delay_range[1], doppler_range[1]] +
+                A_eff[delay_range[1], doppler_range[2]] +
+                doppler_frac * A_eff[delay_range[1], doppler_range[3]] +
+                (1 - doppler_frac) * A_eff[delay_range[2], doppler_range[0]] +
+                A_eff[delay_range[2], doppler_range[1]] +
+                A_eff[delay_range[2], doppler_range[2]] +
+                doppler_frac * A_eff[delay_range[2], doppler_range[3]] +
+                (1 - doppler_frac) * delay_frac * A_eff[delay_range[3], doppler_range[0]] +
+                delay_frac * A_eff[delay_range[3], doppler_range[1]] +
+                delay_frac * A_eff[delay_range[3], doppler_range[2]] +
+                delay_frac * doppler_frac * A_eff[delay_range[3], doppler_range[3]]
+        )
+
+    elif doppler_frac < 0:
+
+        if doppler_intg <= 3 and doppler_intg > 1:
+            doppler_range = range(doppler_intg - 2, doppler_intg + 2)
+
+        elif doppler_intg > 3:
+            doppler_range = range(2, 6)
+
+        elif doppler_intg <= 1:
+            doppler_range = range(1, 5)
+
+        brcs_copol_ddma = (
+                (1 - delay_frac) * abs(doppler_frac) * brcs_copol[delay_range[0], doppler_range[0]] +
+                (1 - delay_frac) * brcs_copol[delay_range[0], doppler_range[1]] +
+                (1 - delay_frac) * brcs_copol[delay_range[0], doppler_range[2]] +
+                (1 - delay_frac) * (1 - abs(doppler_frac)) * brcs_copol[delay_range[0], doppler_range[3]] +
+                abs(doppler_frac) * brcs_copol[delay_range[1], doppler_range[0]] +
+                brcs_copol[delay_range[1], doppler_range[1]] +
+                brcs_copol[delay_range[1], doppler_range[2]] +
+                (1 - abs(doppler_frac)) * brcs_copol[delay_range[1], doppler_range[3]] +
+                abs(doppler_frac) * brcs_copol[delay_range[2], doppler_range[0]] +
+                brcs_copol[delay_range[2], doppler_range[1]] +
+                brcs_copol[delay_range[2], doppler_range[2]] +
+                (1 - abs(doppler_frac)) * brcs_copol[delay_range[2], doppler_range[3]] +
+                abs(doppler_frac) * delay_frac * brcs_copol[delay_range[3], doppler_range[0]] +
+                delay_frac * brcs_copol[delay_range[3], doppler_range[1]] +
+                delay_frac * brcs_copol[delay_range[3], doppler_range[2]] +
+                delay_frac * (1 - abs(doppler_frac)) * brcs_copol[delay_range[3], doppler_range[3]]
+        )
+
+        brcs_xpol_ddma = (
+                (1 - delay_frac) * abs(doppler_frac) * brcs_xpol[delay_range[0], doppler_range[0]] +
+                (1 - delay_frac) * brcs_xpol[delay_range[0], doppler_range[1]] +
+                (1 - delay_frac) * brcs_xpol[delay_range[0], doppler_range[2]] +
+                (1 - delay_frac) * (1 - abs(doppler_frac)) * brcs_xpol[delay_range[0], doppler_range[3]] +
+                abs(doppler_frac) * brcs_copol[delay_range[1], doppler_range[0]] +
+                brcs_xpol[delay_range[1], doppler_range[1]] +
+                brcs_xpol[delay_range[1], doppler_range[2]] +
+                (1 - abs(doppler_frac)) * brcs_xpol[delay_range[1], doppler_range[3]] +
+                abs(doppler_frac) * brcs_xpol[delay_range[2], doppler_range[0]] +
+                brcs_xpol[delay_range[2], doppler_range[1]] +
+                brcs_xpol[delay_range[2], doppler_range[2]] +
+                (1 - abs(doppler_frac)) * brcs_xpol[delay_range[2], doppler_range[3]] +
+                abs(doppler_frac) * delay_frac * brcs_xpol[delay_range[3], doppler_range[0]] +
+                delay_frac * brcs_xpol[delay_range[3], doppler_range[1]] +
+                delay_frac * brcs_xpol[delay_range[3], doppler_range[2]] +
+                delay_frac * (1 - abs(doppler_frac)) * brcs_xpol[delay_range[3], doppler_range[3]]
+        )
+
+        A_eff_ddma = (
+                (1 - delay_frac) * abs(doppler_frac) * A_eff[delay_range[0], doppler_range[0]] +
+                (1 - delay_frac) * A_eff[delay_range[0], doppler_range[1]] +
+                (1 - delay_frac) * A_eff[delay_range[0], doppler_range[2]] +
+                (1 - delay_frac) * (1 - abs(doppler_frac)) * A_eff[delay_range[0], doppler_range[3]] +
+                abs(doppler_frac) * A_eff[delay_range[1], doppler_range[0]] +
+                A_eff[delay_range[1], doppler_range[1]] +
+                A_eff[delay_range[1], doppler_range[2]] +
+                (1 - abs(doppler_frac)) * A_eff[delay_range[1], doppler_range[3]] +
+                abs(doppler_frac) * A_eff[delay_range[2], doppler_range[0]] +
+                A_eff[delay_range[2], doppler_range[1]] +
+                A_eff[delay_range[2], doppler_range[2]] +
+                (1 - abs(doppler_frac)) * A_eff[delay_range[2], doppler_range[3]] +
+                abs(doppler_frac) * delay_frac * A_eff[delay_range[3], doppler_range[0]] +
+                delay_frac * A_eff[delay_range[3], doppler_range[1]] +
+                delay_frac * A_eff[delay_range[3], doppler_range[2]] +
+                delay_frac * (1 - abs(doppler_frac)) * A_eff[delay_range[3], doppler_range[3]]
+        )
+
+    return brcs_copol_ddma, brcs_xpol_ddma, A_eff_ddma
 
 
 def get_amb_fun(dtau_s, dfreq_Hz, tau_c, Ti):
@@ -257,6 +522,7 @@ def get_chi2(
     return chi2
 
 
+@timeit
 def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
     # derive amb-function (chi2) to be used in computing A_eff
     # % Matlab corrects delay/Doppler index by adding +1, Python doesn't
@@ -268,7 +534,10 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
         L0.delay_bin_res,
         L0.doppler_bin_res,
     )  # 0-based
-
+    nbrcs_copol1_v1 = np.full([L0.I, L0.J_2], np.nan)
+    nbrcs_xpol1_v1 = np.full([L0.I, L0.J_2], np.nan)
+    nbrcs_scatter_area_v1 = np.full([L0.I, L0.J], np.nan)
+    # nbrcs_scatter_area_v1 = np.full([L0.I, L0.J], np.nan)
     # iterate over each second of flight
     for sec in range(L0.I):
         # retrieve velocities and altitdues
@@ -293,14 +562,14 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
             unit_tx_vel1 = tx_vel_xyz1 / np.linalg.norm(tx_vel_xyz1, 2)
 
             # 1st input of A_eff
-            az_angle1 = math.degrees(math.acos(np.dot(unit_rx_vel1, unit_tx_vel1)))
+            az_angle1 = math.degrees(math.acos(-1 * np.dot(unit_rx_vel1, unit_tx_vel1)))
 
             sx_pos_xyz1 = [
                 L1.postCal["sp_pos_x"][sec][ngrx_channel],
                 L1.postCal["sp_pos_y"][sec][ngrx_channel],
                 L1.postCal["sp_pos_z"][sec][ngrx_channel],
             ]
-            sx_lla1 = ecef2lla.transform(*sx_pos_xyz1, radians=False)
+            sx_lla1 = ecef2lla.transform(*sx_pos_xyz1, radians=False)  # TODO: alt large deviation with MATLAB
 
             # 2nd input of A_eff
             rx_alt_corrected1 = rx_alt1 - sx_lla1[2]
@@ -310,8 +579,8 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
 
             brcs_copol1 = L1.postCal["brcs"][sec][ngrx_channel]
             brcs_xpol1 = L1.postCal["brcs"][sec][ngrx_channel + L0.J_2]
-            counts_LHCP1 = L1.ddm_power_counts[sec][ngrx_channel]
-            snr_LHCP1 = L1.postCal["ddm_snr"][sec][ngrx_channel]
+            # counts_LHCP1 = L1.ddm_power_counts[sec][ngrx_channel]
+            # snr_LHCP1 = L1.postCal["ddm_snr"][sec][ngrx_channel]
 
             # evaluate delay and Doppler bin location at SP
             # Matlab uses +1, not required in Python 0-based indexing
@@ -322,7 +591,7 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
             SP_cond = (0 <= sp_delay_row1 <= 38) and (0 <= sp_doppler_col1 <= 4)
             # ensure interpolate within reasonable range
             interp_cond = inp.rx_alt_bins[0] <= rx_alt_corrected1 <= inp.rx_alt_bins[-1]
-            angle_cond = 0 <= inc_angle1 <= 80
+            angle_cond = 0 <= inc_angle1 <= 80 and not np.isnan(az_angle1)
 
             if SP_cond and interp_cond and angle_cond:
                 # note that the A_eff1 is transposed due to shape inconsistencies
@@ -337,79 +606,41 @@ def aeff_and_nbrcs(L0, L1, inp, rx_vel_x, rx_vel_y, rx_vel_z, rx_pos_lla):
                     inp.A_phy_LUT_all,
                 ).T
 
-                # derive NBRCS - single theoretical SP bin
-                # formerly delay_intg1 and delay_frac1, shortened for code clarity
-                del_intg1 = int(np.floor(sp_delay_row1) + 1)
-                del_frac1 = sp_delay_row1 - np.floor(sp_delay_row1)
+                L1.A_eff[sec][ngrx_channel] = A_eff1  # TODO: confirm MATLAB code, A_eff1 is not assigned to A_eff
 
-                # formerly delay_intg1 and delay_frac1, shortened for code clarity
-                dop_intg1 = int(np.floor(sp_doppler_col1) + 1)
-                dop_frac1 = sp_doppler_col1 - np.floor(sp_doppler_col1)
+                # nbrcs for SP bin
+                brcs_copol_ddma1, brcs_xpol_ddma1, A_eff_ddma1 = get_ddma_v1(
+                    brcs_copol1,
+                    brcs_xpol1,
+                    A_eff1,
+                    sp_delay_row1,
+                    sp_doppler_col1
+                )
 
-                term1 = 1 - dop_frac1
-                term2 = 1 - del_frac1
+                nbrcs_copol1_v1[sec, ngrx_channel] = brcs_copol_ddma1 / A_eff_ddma1
+                nbrcs_xpol1_v1[sec, ngrx_channel] = brcs_xpol_ddma1 / A_eff_ddma1
+                nbrcs_scatter_area_v1[sec, ngrx_channel] = A_eff_ddma1
 
-                if dop_intg1 <= 3:
-                    brcs_copol_ddma1 = (
-                        (term1 * term2 * brcs_copol1[del_intg1, dop_intg1])
-                        + (term1 * del_frac1 * brcs_copol1[del_intg1 + 1, dop_intg1])
-                        + (dop_frac1 * term2 * brcs_copol1[del_intg1, dop_intg1 + 1])
-                        + (
-                            dop_frac1
-                            * del_frac1
-                            * brcs_copol1[del_intg1 + 1, dop_intg1 + 1]
-                        )
-                    )
+                # nbrcs for 3*3bin
+                # brcs_copol_ddma2, brcs_xpol_ddma2, A_eff_ddma2 = get_ddma_v2(
+                #     brcs_copol1,
+                #     brcs_xpol1,
+                #     A_eff1,
+                #     sp_delay_row1,
+                #     sp_doppler_col1
+                # )
 
-                    brcs_xpol_ddma1 = (
-                        (term1 * term2 * brcs_xpol1[del_intg1, dop_intg1])
-                        + (term1 * del_frac1 * brcs_xpol1[del_intg1 + 1, dop_intg1])
-                        + (dop_frac1 * term2 * brcs_xpol1[del_intg1, dop_intg1 + 1])
-                        + (
-                            dop_frac1
-                            * del_frac1
-                            * brcs_xpol1[del_intg1 + 1, dop_intg1 + 1]
-                        )
-                    )
+                # nbrcs_copol1_v2[sec, ngrx_channel] = brcs_copol_ddma2 / A_eff_ddma2
+                # nbrcs_xpol1_v2[sec, ngrx_channel] = brcs_xpol_ddma2 / A_eff_ddma2
+                # nbrcs_scatter_area_v2[sec, ngrx_channel] = A_eff_ddma2
 
-                    A_eff_ddma1 = (
-                        (term1 * term2 * A_eff1[del_intg1, dop_intg1])
-                        + (term1 * del_frac1 * A_eff1[del_intg1 + 1, dop_intg1])
-                        + (dop_frac1 * term2 * A_eff1[del_intg1, dop_intg1 + 1])
-                        + (dop_frac1 * del_frac1 * A_eff1[del_intg1 + 1, dop_intg1 + 1])
-                    )
+    L1.A_eff[:, L0.J_2: L0.J] = L1.A_eff[:, 0: L0.J_2]
+    nbrcs_scatter_area_v1[:, L0.J_2: L0.J] = nbrcs_scatter_area_v1[:, 0: L0.J_2]
+    ddm_nbrcs_v1 = np.concatenate((nbrcs_copol1_v1, nbrcs_xpol1_v1), axis=1)
+    # ddm_nbrcs_v2 = np.concatenate((nbrcs_copol1_v2, nbrcs_xpol1_v2), axis=1)
+    L1.postCal["nbrcs_scatter"] = L1.A_eff
+    L1.postCal["nbrcs_scatter_area_v1"] = nbrcs_scatter_area_v1
+    # L1.postCal["nbrcs_scatter_area_v2"] = nbrcs_scatter_area_v2
 
-                else:
-                    brcs_copol_ddma1 = (1 - del_frac1) * brcs_copol1[
-                        del_intg1, dop_intg1
-                    ] + (del_frac1 * brcs_copol1[del_intg1 + 1, dop_intg1])
-
-                    brcs_xpol_ddma1 = (1 - del_frac1) * brcs_xpol1[
-                        del_intg1, dop_intg1
-                    ] + (del_frac1 * brcs_xpol1[del_intg1 + 1, dop_intg1])
-                    A_eff_ddma1 = (1 - del_frac1) * A_eff1[del_intg1, dop_intg1] + (
-                        del_frac1 * A_eff1[del_intg1 + 1, dop_intg1]
-                    )
-
-                nbrcs_copol1 = brcs_copol_ddma1 / A_eff_ddma1
-                nbrcs_xpol1 = brcs_xpol_ddma1 / A_eff_ddma1
-
-                # coherent reflection
-                CR1, CS1 = coh_det(counts_LHCP1, snr_LHCP1)
-
-                L1.A_eff[sec][ngrx_channel] = A_eff1
-                L1.postCal["nbrcs_scatter_area"][sec][ngrx_channel] = A_eff_ddma1
-
-                L1.nbrcs[sec][ngrx_channel] = nbrcs_copol1
-                L1.nbrcs[sec][ngrx_channel + L0.J_2] = nbrcs_xpol1
-
-                L1.coherency_ratio[sec][ngrx_channel] = CR1
-                L1.coherency_state[sec][ngrx_channel] = CS1
-
-    L1.A_eff[:, L0.J_2 : L0.J] = L1.A_eff[:, 0 : L0.J_2]
-    L1.postCal["nbrcs_scatter_area"][:, L0.J_2 : L0.J] = L1.postCal[
-        "nbrcs_scatter_area"
-    ][:, 0 : L0.J_2]
-
-    L1.coherency_ratio[:, L0.J_2 : L0.J] = L1.coherency_ratio[:, 0 : L0.J_2]
-    L1.coherency_state[:, L0.J_2 : L0.J] = L1.coherency_state[:, 0 : L0.J_2]
+    L1.postCal["ddm_nbrcs_v1"] = ddm_nbrcs_v1
+    # L1.postCal["ddm_nbrcs_v2"] = ddm_nbrcs_v2

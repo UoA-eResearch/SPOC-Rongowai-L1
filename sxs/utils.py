@@ -2,6 +2,7 @@ import math
 import numpy as np
 from rasterio.windows import Window
 from scipy.interpolate import interp1d
+from datetime import datetime
 
 # L = 18030
 # grid_res = 30  # L may need to be updated in the future
@@ -12,6 +13,17 @@ LOCAL_DEM_RES = 30
 LOCAL_DEM_MARGIN = 0
 LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
 LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
+
+
+def timeit(f):
+    """timer decorator"""
+    def wrapper(*args, **kwargs):
+        start = datetime.now()
+        result = f(*args, **kwargs)
+        span = datetime.now() - start
+        print(f"{f.__name__}: runtime {span}")
+        return result
+    return wrapper
 
 
 def expand_to_RHCP(array, J_2, J):
@@ -56,8 +68,8 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
     else:
         local_ele = dtu10(
             (
-                np.tile(local_lon, LOCAL_NUM_PIXELS),
-                np.repeat(local_lat, LOCAL_NUM_PIXELS),
+                np.tile(local_lat, LOCAL_NUM_PIXELS),
+                np.repeat(local_lon, LOCAL_NUM_PIXELS)
             )
         ).reshape(-1, LOCAL_NUM_PIXELS)
 
@@ -69,7 +81,7 @@ def get_pek_value(lat, lon, water_mask):
     lat_index = math.ceil((water_mask["lat_max"] - lat) / water_mask["res_deg"]) - 1
     lon_index = math.ceil((lon - water_mask["lon_min"]) / water_mask["res_deg"]) - 1
 
-    data = water_mask["file"].read(1, window=Window(lat_index, lon_index, 1, 1))
+    data = water_mask["file"].read(1, window=Window(lon_index, lat_index, 1, 1))
     return data
 
 
@@ -85,7 +97,7 @@ def get_surf_type2(P, cst_mask, lcv_mask, water_mask):
     # water_mask1 = water_mask[file_id]
     pek_value = get_pek_value(P[0], P[1], water_mask[file_id])
 
-    dist_coast = cst_mask((P[1], P[0]))
+    dist_coast = cst_mask((P[0], P[1]))
 
     if all([pek_value > 0, landcover_type != -1, dist_coast > 0.5]):
         surface_type = 3  # not consistent with matlab code

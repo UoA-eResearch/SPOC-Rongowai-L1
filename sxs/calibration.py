@@ -1,5 +1,7 @@
 import numpy as np
 import math
+from scipy.interpolate import interp1d
+from utils import timeit
 
 # ignore divide by zero in log10
 np.seterr(divide="ignore")
@@ -17,6 +19,9 @@ def power2db(power):
 
 def db2power(db):
     return np.power(10, np.divide(db, 10))
+
+def mag2db(magnitude):
+    return np.multiply(np.log10(magnitude), 20)
 
 
 def L1a_counts2watts(inp, ddm_counts, ANZ_port, std_dev):
@@ -66,20 +71,69 @@ def L1a_counts2watts(inp, ddm_counts, ANZ_port, std_dev):
     return 10 ** ((ddm_power_dbm - 30) / 10)
 
 
+def L1a_counts2watts2(inp, ddm_counts, ANZ_port, std_dev, noise_floor):
+    """Converts raw DDM counts to DDM power in watts
+
+    Parameters
+    ----------
+    inp : class
+    ddm_counts : np.array()
+        Scaled counts of a given DDM
+    ANZ_port : int
+    std_dev : List[float,float,float]
+        List of binning standard deviation values per sec per RF1/RF2/RF3
+    noise_floor : np.array()
+
+    Returns
+    -------
+    ddm_power_dbm : numpy.array(numpy.float64)
+        Returns DDM as calibrated power in Watts
+    """
+    binning_thres_db = [50.5, 49.6, 50.4]
+    binning_thres = db2power(binning_thres_db)
+
+    noise_floor_LHCP = noise_floor[0][0]
+    noise_floor_RHCP = noise_floor[0][-1]
+
+    # select approiate calibration constants based on the input ANZ port channel
+    ddm_counts_ch = inp.L1a_cal_ddm_counts[ANZ_port]
+    ddm_power_ch = inp.L1a_cal_ddm_power[ANZ_port]
+    if ANZ_port == 1:
+        ddm_counts = ddm_counts - noise_floor_LHCP
+    elif ANZ_port == 2:
+        ddm_counts = ddm_counts - noise_floor_RHCP
+    else:
+        ddm_counts = None
+    mag_std_dev_ch = std_dev[ANZ_port]
+    binning_thres_ch = binning_thres[ANZ_port]
+    std_dev_ch = mag_std_dev_ch ** 2
+
+    # evaluate ddm power in watts
+    # ddm_power = inp.L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts))
+    f = interp1d(ddm_counts_ch, ddm_power_ch, kind="cubic", fill_value="extrapolate")
+    ddm_power = f(np.ma.getdata(ddm_counts))
+    ddm_power_watts = ddm_power * std_dev_ch / binning_thres_ch
+    return ddm_power_watts
+
+
+@timeit
 def ddm_calibration(
     inp,
-    std_dev_rf1,
-    std_dev_rf2,
-    std_dev_rf3,
-    J,
-    prn_code,
-    raw_counts,
-    rf_source,
-    first_scale_factor,
-    ddm_power_counts,
-    power_analog,
-    ddm_ant,
-    inst_gain,
+    L0,
+    L1
+    # std_dev_rf1,
+    # std_dev_rf2,
+    # std_dev_rf3,
+    # J,
+    # prn_code,
+    # raw_counts,
+    # rf_source,
+    # first_scale_factor,
+    # ddm_power_counts,
+    # power_analog,
+    # ddm_ant,
+    # inst_gain,
+    # noise_floor,
 ):
     """Calibrates raw DDMs into power DDMs in Watts
 
@@ -110,6 +164,19 @@ def ddm_calibration(
     inst_gain : numpy.array()
         Empty array to receive inst_gain
     """
+    std_dev_rf1 = L0.std_dev_rf1
+    std_dev_rf2 = L0.std_dev_rf2
+    std_dev_rf3 = L0.std_dev_rf3
+    J = L0.J
+    prn_code = L1.postCal["prn_code"]
+    raw_counts = L0.raw_counts
+    rf_source = L0.rf_source
+    first_scale_factor = L0.first_scale_factor
+    ddm_power_counts = L1.ddm_power_counts
+    power_analog = L1.power_analog
+    ddm_ant = L1.postCal["ddm_ant"]
+    inst_gain = L1.postCal["inst_gain"]
+    noise_floor = L1.postCal["ddm_noise_floor"]
     # derive signal power
     # iterate over seconds of flight
     for sec in range(len(std_dev_rf1)):
@@ -127,7 +194,7 @@ def ddm_calibration(
             if any(
                 [
                     np.isnan(prn_code1),
-                    (raw_counts1[1, 1] == 0),
+                    (raw_counts1[0, 0] == 0),
                     raw_counts1[0, 0] == raw_counts1[20, 2],
                 ]
             ):
@@ -136,25 +203,24 @@ def ddm_calibration(
             # if (
             #    (not np.isnan(prn_code1))
             #    and (raw_counts1[0, 0] != raw_counts1[20, 2])
-            #    and (raw_counts1[1, 1] != 0)
+            #    and (raw_counts1[0, 0] != 0)
             # ):
             # scale raw counts and convert from counts to watts
             ANZ_port1 = ANZ_port_dict[rf_source1]
             ddm_power_counts1 = raw_counts1 * first_scale_factor1
 
             # perform L1a calibration from Counts to Watts
-            ddm_power_watts1 = L1a_counts2watts(
+            ddm_power_watts1 = L1a_counts2watts2(
                 inp,
                 ddm_power_counts1,
                 ANZ_port1,
                 std_dev1,
+                noise_floor
             )
 
             # peak ddm location
             # find peak counts/watts/delay from DDM data
             peak_counts1 = np.max(ddm_power_counts1)
-            # 0-based index
-            peak_delay_bin1 = np.where(ddm_power_counts1 == peak_counts1)[0][0]
             peak_power1 = np.max(ddm_power_watts1)
 
             inst_gain1 = peak_counts1 / peak_power1
@@ -165,3 +231,24 @@ def ddm_calibration(
             # 0-based index
             ddm_ant[sec][ngrx_channel] = ANZ_port1 + 1
             inst_gain[sec][ngrx_channel] = inst_gain1
+
+    L1a_power_calibration_flag_LHCP = np.zeros((len(std_dev_rf1), int(J/2)))
+    L1a_power_calibration_flag_RHCP = np.zeros((len(std_dev_rf1), int(J/2)))
+
+    std_dev_rf2_db = np.tile(mag2db(std_dev_rf2), (int(J/2), 1)).T
+    std_dev_rf3_db = np.tile(mag2db(std_dev_rf3), (int(J/2), 1)).T
+
+    flag_idx_rf2 = std_dev_rf2_db > 65
+    flag_idx_rf3 = std_dev_rf3_db > 65
+
+    L1a_power_calibration_flag_LHCP[flag_idx_rf2] = 1
+    L1a_power_calibration_flag_RHCP[flag_idx_rf3] = 1
+
+    L1a_power_calibration_flag = np.concatenate(
+        (L1a_power_calibration_flag_LHCP, L1a_power_calibration_flag_RHCP), axis=1
+    )
+
+    L1.postCal["L1a_power_calibration_flag"] = L1a_power_calibration_flag
+    L1.postCal["L1a_power_ddm"] = power_analog
+    L1.postCal["inst_gain"] = inst_gain
+    L1.postCal["ddm_ant"] = ddm_ant

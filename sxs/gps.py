@@ -5,6 +5,7 @@ from ctypes import CDLL, c_double, c_uint, c_char_p, byref
 import numpy as np
 from pathlib import Path
 from scipy import constants
+from utils import timeit
 
 from load_files import load_orbit_file
 
@@ -175,6 +176,7 @@ def satellite_orbits(
             )
 
 
+@timeit
 def calculate_satellite_orbits(settings, L0, L1, inp):
     # determine unique satellite transponder IDs
     trans_id_unique = np.unique(L0.transmitter_id)

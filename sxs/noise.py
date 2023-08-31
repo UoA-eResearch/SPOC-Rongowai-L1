@@ -2,7 +2,7 @@ import numpy as np
 from scipy import constants
 
 from calibration import power2db
-from utils import expand_to_RHCP
+from utils import expand_to_RHCP, timeit
 
 
 def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
@@ -76,6 +76,7 @@ def delay_correction(delay_chips_in, P):
     return delay_chips_out
 
 
+@timeit
 def noise_floor_prep(
     L0,
     L1,
@@ -88,6 +89,14 @@ def noise_floor_prep(
     rx_vel_z,
 ):
     delay_offset = 4
+
+    for ngrx_channel in range(L0.J):
+        for sec in range(L0.I):
+            first_scale_factor1 = L0.first_scale_factor[sec][ngrx_channel]
+            raw_counts1 = L0.raw_counts[sec][ngrx_channel]
+            L1.ddm_power_counts[sec][ngrx_channel] = first_scale_factor1 * raw_counts1
+
+    L1.postCal["raw_counts"] = L1.ddm_power_counts
 
     # derive floating SP bin location and effective scattering area A_eff
     for sec in range(L0.I):
@@ -164,7 +173,7 @@ def noise_floor_prep(
                 )
 
                 add_range_to_sp_soc1 = r_tsx1 + r_rsx1 - r_trx1
-                d_add_range1 = add_range_to_sp_soc1 - add_range_to_sp1
+                d_add_range1 = add_range_to_sp_soc1 - add_range_to_sp1  # TODO: here amplify the difference with MATLAB
 
                 d_delay_chips1 = meter2chips(d_add_range1)
                 d_delay_bin1 = d_delay_chips1 / L0.delay_bin_res
@@ -178,7 +187,7 @@ def noise_floor_prep(
 
                 doppler_center_hz1 = L0.doppler_center_hz[sec][ngrx_channel]
 
-                d_doppler_hz1 = doppler_center_hz1 - sp_doppler_hz1 + 250
+                d_doppler_hz1 = doppler_center_hz1 - sp_doppler_hz1
                 d_doppler_bin1 = d_doppler_hz1 / L0.doppler_bin_res
 
                 sp_doppler_col1 = L0.center_doppler_bin - d_doppler_bin1
@@ -190,7 +199,7 @@ def noise_floor_prep(
                 L1.peak_doppler_col[sec][ngrx_channel] = peak_doppler_col1[0]
 
                 L1.sp_delay_row[sec][ngrx_channel] = sp_delay_row1
-                L1.sp_delay_error[sec][ngrx_channel] = d_delay_chips1
+                L1.sp_delay_error[sec][ngrx_channel] = d_delay_chips1  # TODO: very different from MATLAB
 
                 L1.sp_doppler_col[sec][ngrx_channel] = sp_doppler_col1
                 L1.sp_doppler_error[sec][ngrx_channel] = d_doppler_hz1
@@ -208,6 +217,7 @@ def noise_floor_prep(
     L1.expand_noise_arrays(L0.J_2, L0.J)
 
 
+@timeit
 def noise_floor(L0, L1):
     sp_safe_margin = 9  # safe space between SP and DDM end
 
@@ -221,13 +231,13 @@ def noise_floor(L0, L1):
     )
 
     # noise floor is the median of the average counts
-    noise_floor_LHCP = np.nanmedian(L1.noise_floor_all_LHCP[valid_idx])
-    noise_floor_RHCP = np.nanmedian(L1.noise_floor_all_RHCP[valid_idx])
+    noise_floor_LHCP = np.nanmedian(L1.noise_floor_all_LHCP[valid_idx])  # P 62329455.44 vs 62197917.7600000 M # TODO: is this correct?
+    noise_floor_RHCP = np.nanmedian(L1.noise_floor_all_RHCP[valid_idx])  # P 60697598.24 vs 60603676.9600000 M
 
     # SNR of SP
     # flag 0 for signal < 0
-    for sec in range(L0.I):
-        for ngrx_channel in range(L0.J_2):
+    for ngrx_channel in range(L0.J_2):
+        for sec in range(L0.I):
             counts_LHCP1 = L1.ddm_power_counts[sec, ngrx_channel, :, :]
             counts_RHCP1 = L1.ddm_power_counts[sec, ngrx_channel + L0.J_2, :, :]
 
@@ -262,41 +272,43 @@ def noise_floor(L0, L1):
                 L1.postCal["ddm_snr"][sec][ngrx_channel + L0.J_2] = snr_RHCP_db1
                 L1.snr_flag[sec][ngrx_channel + L0.J_2] = snr_flag_RHCP1
 
-                sx_delay_error1 = abs(L1.sp_delay_error[sec][ngrx_channel])
-                sx_doppler_error1 = abs(L1.sp_doppler_error[sec][ngrx_channel])
-                sx_d_snell_angle1 = abs(
-                    L1.postCal["sp_d_snell_angle"][sec][ngrx_channel]
-                )
-
-                if not np.isnan(L1.postCal["tx_pos_x"][sec][ngrx_channel]):
-                    # criteria may change at a later stage
-                    delay_doppler_snell1 = (
-                        (sx_delay_error1 < 1.25)
-                        & (abs(sx_doppler_error1) < 250)
-                        & (sx_d_snell_angle1 < 2)
-                    )
-
-                    # Python snr_LHCP_db1 == Matlab snr_LHCP1 for this step,
-                    # Python does this all in one loop whereas Matlab does this in multiple
-                    # loops and re-uses the snr_LHCP1 variable to refer to snr_LHCP_db1 values
-                    if (snr_LHCP_db1 >= 2.0) and not delay_doppler_snell1:
-                        confidence_flag1 = 0
-                    elif (snr_LHCP_db1 < 2.0) and not delay_doppler_snell1:
-                        confidence_flag1 = 1
-                    elif (snr_LHCP_db1 < 2.0) and delay_doppler_snell1:
-                        confidence_flag1 = 2
-                    elif (snr_LHCP_db1 >= 2.0) and delay_doppler_snell1:
-                        confidence_flag1 = 3
-                    else:
-                        confidence_flag1 = np.nan
-
-                    L1.confidence_flag[sec][ngrx_channel] = confidence_flag1
-
     noise_floor = np.hstack(
         (
-            np.full([L0.shape_4d[2], L0.shape_4d[3]], noise_floor_LHCP),
-            np.full([L0.shape_4d[2], L0.shape_4d[3]], noise_floor_RHCP),
+            np.full([L0.shape_4d[0], int(L0.shape_4d[1] / 2)], noise_floor_LHCP),
+            np.full([L0.shape_4d[0], int(L0.shape_4d[1] / 2)], noise_floor_RHCP),
         )
     )
     L1.postCal["ddm_noise_floor"] = noise_floor
+    L1.postCal["ddm_snr_flag"] = L1.snr_flag
+
+
+@timeit
+def confidence_flag(L0, L1):
+    for ngrx_channel in range(L0.J_2):
+        for sec in range(L0.I):
+            sx_delay_error = abs(L1.sp_delay_error[sec][ngrx_channel])
+            sx_doppler_error = abs(L1.sp_doppler_error[sec][ngrx_channel])
+            sx_d_snell_angle = abs(L1.postCal["sp_d_snell_angle"][sec][ngrx_channel])
+
+            if not np.isnan(L1.postCal["tx_pos_x"][sec][ngrx_channel]):
+                # criteria may change at a later stage
+                delay_doppler_snell = (
+                    (sx_delay_error < 1.25)
+                    and (abs(sx_doppler_error) < 250)
+                    and (sx_d_snell_angle < 2)
+                )
+
+                if (L1.postCal["ddm_snr"][sec][ngrx_channel] >= 2.0) and not delay_doppler_snell:
+                    confidence_flag = 0
+                elif (L1.postCal["ddm_snr"][sec][ngrx_channel] < 2.0) and not delay_doppler_snell:
+                    confidence_flag = 1
+                elif (L1.postCal["ddm_snr"][sec][ngrx_channel] < 2.0) and delay_doppler_snell:
+                    confidence_flag = 2
+                elif (L1.postCal["ddm_snr"][sec][ngrx_channel] >= 2.0) and delay_doppler_snell:
+                    confidence_flag = 3
+                else:
+                    confidence_flag = np.nan
+
+                L1.confidence_flag[sec][ngrx_channel] = confidence_flag
+
     L1.confidence_flag = expand_to_RHCP(L1.confidence_flag, L0.J_2, L0.J)
