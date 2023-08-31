@@ -36,8 +36,8 @@ L1_RHCP_L="GNSS_RHCP_L_gain_db_i_v2.dat"
 L1_RHCP_R="GNSS_RHCP_R_gain_db_i_v2.dat"
 
 # Credentials for automated orbital retrieval via cddis.nasa.gov
-L1_CDDIS_USERNAME="user"
-L1_CDDIS_PASSWORD="123456"
+L1_CDDIS_USERNAME="USERNAME"
+L1_CDDIS_PASSWORD="PASSWORD"
 
 # ---------- L1 Metadata info ------------
 # default value
