@@ -17,12 +17,14 @@ LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
 
 def timeit(f):
     """timer decorator"""
+
     def wrapper(*args, **kwargs):
         start = datetime.now()
         result = f(*args, **kwargs)
         span = datetime.now() - start
         print(f"{f.__name__}: runtime {span}")
         return result
+
     return wrapper
 
 
@@ -69,7 +71,7 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
         local_ele = dtu10(
             (
                 np.tile(local_lat, LOCAL_NUM_PIXELS),
-                np.repeat(local_lon, LOCAL_NUM_PIXELS)
+                np.repeat(local_lon, LOCAL_NUM_PIXELS),
             )
         ).reshape(-1, LOCAL_NUM_PIXELS)
 

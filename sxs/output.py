@@ -439,7 +439,7 @@ def write_netcdf(dict_in, definition_file, output_file):
                     var_k.units = ds_k["Units"].values[0]
                     var_k.long_name = ds_k["Long_name"].values[0]
                     var_k.comment = ds_k["Comment"].values[0]
-                    var_k[()] = v
+                    var_k[:] = v
             else:  # variable
                 var_k = ncfile.createVariable(
                     k, get_datatype(ds_k), get_dimensions(ds_k), zlib=True

@@ -2,7 +2,7 @@ import numpy as np
 from scipy import constants
 
 from calibration import power2db
-from utils import expand_to_RHCP, timeit
+from utils import expand_to_RHCP
 
 
 def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
@@ -76,7 +76,6 @@ def delay_correction(delay_chips_in, P):
     return delay_chips_out
 
 
-@timeit
 def noise_floor_prep(
     L0,
     L1,
@@ -173,8 +172,7 @@ def noise_floor_prep(
                 )
 
                 add_range_to_sp_soc1 = r_tsx1 + r_rsx1 - r_trx1
-                d_add_range1 = add_range_to_sp_soc1 - add_range_to_sp1  # TODO: here amplify the difference with MATLAB
-
+                d_add_range1 = add_range_to_sp_soc1 - add_range_to_sp1
                 d_delay_chips1 = meter2chips(d_add_range1)
                 d_delay_bin1 = d_delay_chips1 / L0.delay_bin_res
 
@@ -199,8 +197,7 @@ def noise_floor_prep(
                 L1.peak_doppler_col[sec][ngrx_channel] = peak_doppler_col1[0]
 
                 L1.sp_delay_row[sec][ngrx_channel] = sp_delay_row1
-                L1.sp_delay_error[sec][ngrx_channel] = d_delay_chips1  # TODO: very different from MATLAB
-
+                L1.sp_delay_error[sec][ngrx_channel] = d_delay_chips1
                 L1.sp_doppler_col[sec][ngrx_channel] = sp_doppler_col1
                 L1.sp_doppler_error[sec][ngrx_channel] = d_doppler_hz1
 
@@ -217,7 +214,6 @@ def noise_floor_prep(
     L1.expand_noise_arrays(L0.J_2, L0.J)
 
 
-@timeit
 def noise_floor(L0, L1):
     sp_safe_margin = 9  # safe space between SP and DDM end
 
@@ -231,8 +227,8 @@ def noise_floor(L0, L1):
     )
 
     # noise floor is the median of the average counts
-    noise_floor_LHCP = np.nanmedian(L1.noise_floor_all_LHCP[valid_idx])  # P 62329455.44 vs 62197917.7600000 M # TODO: is this correct?
-    noise_floor_RHCP = np.nanmedian(L1.noise_floor_all_RHCP[valid_idx])  # P 60697598.24 vs 60603676.9600000 M
+    noise_floor_LHCP = np.nanmedian(L1.noise_floor_all_LHCP[valid_idx])
+    noise_floor_RHCP = np.nanmedian(L1.noise_floor_all_RHCP[valid_idx])
 
     # SNR of SP
     # flag 0 for signal < 0
@@ -282,7 +278,6 @@ def noise_floor(L0, L1):
     L1.postCal["ddm_snr_flag"] = L1.snr_flag
 
 
-@timeit
 def confidence_flag(L0, L1):
     for ngrx_channel in range(L0.J_2):
         for sec in range(L0.I):
@@ -298,13 +293,21 @@ def confidence_flag(L0, L1):
                     and (sx_d_snell_angle < 2)
                 )
 
-                if (L1.postCal["ddm_snr"][sec][ngrx_channel] >= 2.0) and not delay_doppler_snell:
+                if (
+                    L1.postCal["ddm_snr"][sec][ngrx_channel] >= 2.0
+                ) and not delay_doppler_snell:
                     confidence_flag = 0
-                elif (L1.postCal["ddm_snr"][sec][ngrx_channel] < 2.0) and not delay_doppler_snell:
+                elif (
+                    L1.postCal["ddm_snr"][sec][ngrx_channel] < 2.0
+                ) and not delay_doppler_snell:
                     confidence_flag = 1
-                elif (L1.postCal["ddm_snr"][sec][ngrx_channel] < 2.0) and delay_doppler_snell:
+                elif (
+                    L1.postCal["ddm_snr"][sec][ngrx_channel] < 2.0
+                ) and delay_doppler_snell:
                     confidence_flag = 2
-                elif (L1.postCal["ddm_snr"][sec][ngrx_channel] >= 2.0) and delay_doppler_snell:
+                elif (
+                    L1.postCal["ddm_snr"][sec][ngrx_channel] >= 2.0
+                ) and delay_doppler_snell:
                     confidence_flag = 3
                 else:
                     confidence_flag = np.nan

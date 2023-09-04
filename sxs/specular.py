@@ -9,7 +9,7 @@ import pymap3d as pm
 import pyproj
 from scipy import constants
 
-from utils import get_local_dem, get_surf_type2, timeit
+from utils import get_local_dem, get_surf_type2
 from projections import ecef2lla, lla2ecef
 
 
@@ -615,7 +615,6 @@ def sp_related(tx, rx, sx_pos_xyz, SV_eirp_LUT):
     return sp_angle_body, sp_angle_enu, sp_angle_ant, theta_gps, range, gps_rad
 
 
-@timeit
 def specular_calculations(
     L0,
     L1,
@@ -761,14 +760,16 @@ def specular_calculations(
                     sx_rx_gain_RHCP1 = get_sx_rx_gain(sx_angle_ant1, inp.RHCP_pattern)
 
                     # determine L1a xpol calibration flag - 28 June
-                    sx_theta_body1 = sx_angle_body1[0]         # off-boresight angle
+                    sx_theta_body1 = sx_angle_body1[0]  # off-boresight angle
 
                     # antenna x-pol gain ratio
-                    copol_ratio1 = sx_rx_gain_LHCP1[0]-sx_rx_gain_LHCP1[1]
-                    xpol_ratio1 = sx_rx_gain_RHCP1[1]-sx_rx_gain_RHCP1[0]
+                    copol_ratio1 = sx_rx_gain_LHCP1[0] - sx_rx_gain_LHCP1[1]
+                    xpol_ratio1 = sx_rx_gain_RHCP1[1] - sx_rx_gain_RHCP1[0]
 
                     if sx_theta_body1 <= 60 and copol_ratio1 >= 14:
-                        L1a_xpol_calibration_flag_copol1 = 0  # consistent with L1 dictionary
+                        L1a_xpol_calibration_flag_copol1 = (
+                            0  # consistent with L1 dictionary
+                        )
                     else:
                         L1a_xpol_calibration_flag_copol1 = 1
 
@@ -806,8 +807,12 @@ def specular_calculations(
                     L1.sx_rx_gain_xpol[sec, ngrx_channel + L0.J_2] = sx_rx_gain_RHCP1[0]
 
                     # L1a xpol calibration flag - rename 22 July
-                    L1.postCal["L1a_xpol_calibration_flag"][sec, ngrx_channel] = L1a_xpol_calibration_flag_copol1
-                    L1.postCal["L1a_xpol_calibration_flag"][sec, ngrx_channel + L0.J_2] = L1a_xpol_confidence_flag_xpol1
+                    L1.postCal["L1a_xpol_calibration_flag"][
+                        sec, ngrx_channel
+                    ] = L1a_xpol_calibration_flag_copol1
+                    L1.postCal["L1a_xpol_calibration_flag"][
+                        sec, ngrx_channel + L0.J_2
+                    ] = L1a_xpol_confidence_flag_xpol1
 
     # expand to RHCP channels
     L1.expand_sp_arrays(L0.J_2, L0.J)

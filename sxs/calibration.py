@@ -1,7 +1,6 @@
 import numpy as np
 import math
 from scipy.interpolate import interp1d
-from utils import timeit
 
 # ignore divide by zero in log10
 np.seterr(divide="ignore")
@@ -19,6 +18,7 @@ def power2db(power):
 
 def db2power(db):
     return np.power(10, np.divide(db, 10))
+
 
 def mag2db(magnitude):
     return np.multiply(np.log10(magnitude), 20)
@@ -106,7 +106,7 @@ def L1a_counts2watts2(inp, ddm_counts, ANZ_port, std_dev, noise_floor):
         ddm_counts = None
     mag_std_dev_ch = std_dev[ANZ_port]
     binning_thres_ch = binning_thres[ANZ_port]
-    std_dev_ch = mag_std_dev_ch ** 2
+    std_dev_ch = mag_std_dev_ch**2
 
     # evaluate ddm power in watts
     # ddm_power = inp.L1a_cal_1dinterp[ANZ_port](np.ma.getdata(ddm_counts))
@@ -116,7 +116,6 @@ def L1a_counts2watts2(inp, ddm_counts, ANZ_port, std_dev, noise_floor):
     return ddm_power_watts
 
 
-@timeit
 def ddm_calibration(
     inp,
     L0,
@@ -211,11 +210,7 @@ def ddm_calibration(
 
             # perform L1a calibration from Counts to Watts
             ddm_power_watts1 = L1a_counts2watts2(
-                inp,
-                ddm_power_counts1,
-                ANZ_port1,
-                std_dev1,
-                noise_floor
+                inp, ddm_power_counts1, ANZ_port1, std_dev1, noise_floor
             )
 
             # peak ddm location
@@ -232,11 +227,11 @@ def ddm_calibration(
             ddm_ant[sec][ngrx_channel] = ANZ_port1 + 1
             inst_gain[sec][ngrx_channel] = inst_gain1
 
-    L1a_power_calibration_flag_LHCP = np.zeros((len(std_dev_rf1), int(J/2)))
-    L1a_power_calibration_flag_RHCP = np.zeros((len(std_dev_rf1), int(J/2)))
+    L1a_power_calibration_flag_LHCP = np.zeros((len(std_dev_rf1), int(J / 2)))
+    L1a_power_calibration_flag_RHCP = np.zeros((len(std_dev_rf1), int(J / 2)))
 
-    std_dev_rf2_db = np.tile(mag2db(std_dev_rf2), (int(J/2), 1)).T
-    std_dev_rf3_db = np.tile(mag2db(std_dev_rf3), (int(J/2), 1)).T
+    std_dev_rf2_db = np.tile(mag2db(std_dev_rf2), (int(J / 2), 1)).T
+    std_dev_rf3_db = np.tile(mag2db(std_dev_rf3), (int(J / 2), 1)).T
 
     flag_idx_rf2 = std_dev_rf2_db > 65
     flag_idx_rf3 = std_dev_rf3_db > 65

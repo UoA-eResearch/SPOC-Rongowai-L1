@@ -38,87 +38,105 @@ class L0_file:
 
     def __init__(self, filename):
         ds = nc.Dataset(filename)
+
+        # load in nan indexes (in mask form) for eng/sci/ddm fields
+        self.eng_nans = ds["/eng/packet_creation_time"][:].mask
+        self.sci_nans = ds["/science/clk_bias_rate_pvt"][:].mask
+        self.ddm_nans = ds["/science/ddm/delay_bin_res_narrow"][:].mask
+        # combine masks OR style to find total mask for all data
+        self.mask = np.ma.mask_or(self.eng_nans, self.sci_nans)
+        self.mask = np.ma.mask_or(self.mask, self.ddm_nans)
         # load in rx-related variables
         # PVT GPS week and sec
-        self.pvt_gps_week = load_netcdf(ds["/science/GPS_week_of_SC_attitude"])
-        self.pvt_gps_sec = load_netcdf(ds["/science/GPS_second_of_SC_attitude"])
+        self.pvt_gps_week = self.compress(ds["/science/GPS_week_of_SC_attitude"])
+        self.pvt_gps_sec = self.compress(ds["/science/GPS_second_of_SC_attitude"])
         # rx positions in ECEF, metres
-        self.rx_pos_x_pvt = load_netcdf(ds["/geometry/receiver/rx_position_x_ecef_m"])
-        self.rx_pos_y_pvt = load_netcdf(ds["/geometry/receiver/rx_position_y_ecef_m"])
-        self.rx_pos_z_pvt = load_netcdf(ds["/geometry/receiver/rx_position_z_ecef_m"])
+        self.rx_pos_x_pvt = self.compress(ds["/geometry/receiver/rx_position_x_ecef_m"])
+        self.rx_pos_y_pvt = self.compress(ds["/geometry/receiver/rx_position_y_ecef_m"])
+        self.rx_pos_z_pvt = self.compress(ds["/geometry/receiver/rx_position_z_ecef_m"])
         # rx velocity in ECEF, m/s
-        self.rx_vel_x_pvt = load_netcdf(ds["/geometry/receiver/rx_velocity_x_ecef_mps"])
-        self.rx_vel_y_pvt = load_netcdf(ds["/geometry/receiver/rx_velocity_y_ecef_mps"])
-        self.rx_vel_z_pvt = load_netcdf(ds["/geometry/receiver/rx_velocity_z_ecef_mps"])
-        # rx attitude, deg | TODO this is actually radians and will be updated
-        self.rx_pitch_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_pitch_deg"])
-        self.rx_roll_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_roll_deg"])
-        self.rx_heading_pvt = load_netcdf(ds["/geometry/receiver/rx_attitude_yaw_deg"])
+        self.rx_vel_x_pvt = self.compress(
+            ds["/geometry/receiver/rx_velocity_x_ecef_mps"]
+        )
+        self.rx_vel_y_pvt = self.compress(
+            ds["/geometry/receiver/rx_velocity_y_ecef_mps"]
+        )
+        self.rx_vel_z_pvt = self.compress(
+            ds["/geometry/receiver/rx_velocity_z_ecef_mps"]
+        )
+        # rx attitude, rad
+        self.rx_pitch_pvt = self.compress(ds["/geometry/receiver/rx_attitude_pitch"])
+        self.rx_roll_pvt = self.compress(ds["/geometry/receiver/rx_attitude_roll"])
+        self.rx_heading_pvt = self.compress(
+            ds["/geometry/receiver/rx_attitude_heading"]
+        )
         # rx clock bias and drifts
-        self.rx_clk_bias_m_pvt = load_netcdf(ds["/geometry/receiver/rx_clock_bias_m"])
-        self.rx_clk_drift_mps_pvt = load_netcdf(
+        self.rx_clk_bias_m_pvt = self.compress(ds["/geometry/receiver/rx_clock_bias_m"])
+        self.rx_clk_drift_mps_pvt = self.compress(
             ds["/geometry/receiver/rx_clock_drift_mps"]
         )
 
-        self.remove_leading_trailing_zeros()
-        self.interpolate_zero_values()
+        # self.remove_leading_trailing_zeros()
+        # self.interpolate_zero_values()
 
         # load in ddm-related variables
         # tx ID/satellite PRN
-        self.transmitter_id = load_netcdf(ds["/science/ddm/transmitter_id"])
+        self.transmitter_id = self.compress(ds["/science/ddm/transmitter_id"])
         # raw counts and ddm parameters
-        self.first_scale_factor = load_netcdf(ds["/science/ddm/first_scale_factor"])
+        self.first_scale_factor = self.compress(ds["/science/ddm/first_scale_factor"])
         # raw counts, uncalibrated
-        self.raw_counts = load_netcdf(ds["/science/ddm/counts"])
-        self.zenith_i2q2 = load_netcdf(ds["/science/ddm/zenith_i2_plus_q2"])
-        self.rf_source = load_netcdf(ds["/science/ddm/RF_source"])
+        self.raw_counts = self.compress(ds["/science/ddm/counts"])
+        self.zenith_i2q2 = self.compress(ds["/science/ddm/zenith_i2_plus_q2"])
+        self.rf_source = self.compress(ds["/science/ddm/RF_source"])
         # binning standard deviation
-        self.std_dev_rf1 = load_netcdf(ds["/science/ddm/RF1_zenith_RHCP_std_dev"])
-        self.std_dev_rf2 = load_netcdf(ds["/science/ddm/RF2_nadir_LHCP_std_dev"])
-        self.std_dev_rf3 = load_netcdf(ds["/science/ddm/RF3_nadir_RHCP_std_dev"])
+        self.std_dev_rf1 = self.compress(ds["/science/ddm/RF1_zenith_RHCP_std_dev"])
+        self.std_dev_rf2 = self.compress(ds["/science/ddm/RF2_nadir_LHCP_std_dev"])
+        self.std_dev_rf3 = self.compress(ds["/science/ddm/RF3_nadir_RHCP_std_dev"])
 
         # delay bin resolution
-        self.delay_bin_res = load_netcdf(ds["/science/ddm/delay_bin_res_narrow"])
+        self.delay_bin_res = self.compress(ds["/science/ddm/delay_bin_res_narrow"])
         self.delay_bin_res = self.delay_bin_res[~np.isnan(self.delay_bin_res)][0]
         # doppler bin resolution
-        self.doppler_bin_res = load_netcdf(ds["/science/ddm/doppler_bin_res_narrow"])
+        self.doppler_bin_res = self.compress(ds["/science/ddm/doppler_bin_res_narrow"])
         self.doppler_bin_res = self.doppler_bin_res[~np.isnan(self.doppler_bin_res)][0]
 
         # delay and Doppler center bin
-        self.center_delay_bin = load_netcdf(ds["/science/ddm/ddm_center_delay_bin"])
+        self.center_delay_bin = self.compress(ds["/science/ddm/ddm_center_delay_bin"])
         self.center_delay_bin = self.center_delay_bin[~np.isnan(self.center_delay_bin)][
             0
         ]
-        self.center_doppler_bin = load_netcdf(ds["/science/ddm/ddm_center_doppler_bin"])
+        self.center_doppler_bin = self.compress(
+            ds["/science/ddm/ddm_center_doppler_bin"]
+        )
         self.center_doppler_bin = self.center_doppler_bin[
             ~np.isnan(self.center_doppler_bin)
         ][0]
 
         # absolute ddm center delay and doppler
-        self.delay_center_chips = load_netcdf(
+        self.delay_center_chips = self.compress(
             ds["/science/ddm/center_delay_bin_code_phase"]
         )
-        self.doppler_center_hz = load_netcdf(
+        self.doppler_center_hz = self.compress(
             ds["/science/ddm/center_doppler_bin_frequency"]
         )
 
         # coherent duration and noncoherent integration
         self.coherent_duration = (
-            load_netcdf(ds["/science/ddm/L1_E1_coherent_duration"]) / 1000
+            self.compress(ds["/science/ddm/L1_E1_coherent_duration"]) / 1000
         )
         self.non_coherent_integrations = (
-            load_netcdf(ds["/science/ddm/L1_E1_non_coherent_integrations"]) / 1000
+            self.compress(ds["/science/ddm/L1_E1_non_coherent_integrations"]) / 1000
         )
 
         # NGRx estimate additional delay path
-        self.add_range_to_sp_pvt = load_netcdf(
+        self.add_range_to_sp_pvt = self.compress(
             ds["/science/ddm/additional_range_to_SP"]
         )
 
         # antenna temperatures and engineering timestamp
-        self.eng_timestamp = load_netcdf(ds["/eng/packet_creation_time"])
-        self.zenith_ant_temp_eng = load_netcdf(ds["/eng/zenith_ant_temp"])
-        self.nadir_ant_temp_eng = load_netcdf(ds["/eng/nadir_ant_temp"])
+        self.eng_timestamp = self.compress(ds["/eng/packet_creation_time"])
+        self.zenith_ant_temp_eng = self.compress(ds["/eng/zenith_ant_temp"])
+        self.nadir_ant_temp_eng = self.compress(ds["/eng/nadir_ant_temp"])
 
         # Define important file shape/ength variables
         self.I = self.transmitter_id.shape[0]
@@ -190,6 +208,31 @@ class L0_file:
         self.rx_clk_bias_m_pvt = interp_funct(self.rx_clk_bias_m_pvt)
         self.rx_clk_drift_mps_pvt = interp_funct(self.rx_clk_drift_mps_pvt)
 
+    def compress(self, netcdf_variable):
+        """compress netcdf masked array variable.
+        Removes masked rows from 1D, 2D, & 4D NetCDF variables.
+        The masks smuggle NaN values into the code which throw off things,
+        so we compress the arrays to drop NaN values
+        Parameters
+        ----------
+        netcdf4.variable
+            Specified variable from a netcdf4 dataset
+
+        Returns
+        -------
+        netcdf_variable as N-D numpy.array
+        """
+        if len(netcdf_variable.shape[:]) == 1:
+            return netcdf_variable[~self.mask].compressed()
+        if len(netcdf_variable.shape[:]) == 2:
+            return np.ma.compress_rows(
+                np.ma.masked_invalid(netcdf_variable[~self.mask])
+            )
+        if len(netcdf_variable.shape[:]) == 4:
+            # note: this results in a masked array that needs special treatment
+            # before use with scipy
+            return netcdf_variable[~self.mask, :, :, :]
+
 
 class input_files:
     """
@@ -218,7 +261,6 @@ class input_files:
         # create the interpolation functions for the 3 ports
         self.L1a_cal_1dinterp = {}
         # adjustments to LHCP and RHCP values - June 27th 2023
-        # offsets = [0, -11.1, -14.4]  # TODO: where do these come from?
         offsets = [0, 0, 0]
         for i in range(1, 3):  # 0 is all nan
             self.L1a_cal_1dinterp[i] = interp1d(
@@ -301,31 +343,6 @@ class input_files:
         # )
 
         self.orbit_path = orbit_path
-
-
-def load_netcdf(netcdf_variable):
-    """Unpack netcdf variable to python variable.
-       Removes masked rows from 1D, 2D, & 4D NetCDF variables.
-       The masks smuggle NaN values into the code which throw off things,
-       so we compress the arrays to drop NaN values
-    Parameters
-    ----------
-    netcdf4.variable
-        Specified variable from a netcdf4 dataset
-
-    Returns
-    -------
-    netcdf_variable as N-D numpy.array
-    """
-    if len(netcdf_variable.shape[:]) == 1:
-        return netcdf_variable[:].compressed()
-    if len(netcdf_variable.shape[:]) == 2:
-        return np.ma.compress_rows(np.ma.masked_invalid(netcdf_variable[:]))
-    if len(netcdf_variable.shape[:]) == 4:
-        # note: this results in a masked array that needs special treatment
-        # before use with scipy
-        count_mask = ~netcdf_variable[:, 0, 0, 0].mask
-        return netcdf_variable[count_mask, :, :, :]
 
 
 # function to load a specified type of binary data from  file

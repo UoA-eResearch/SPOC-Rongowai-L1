@@ -6,7 +6,6 @@ from pathlib import Path
 import warnings
 
 warnings.simplefilter(action="ignore", category=RuntimeWarning)
-from timeit import default_timer as timer
 from aeff import aeff_and_nbrcs
 from brcs import brcs_calculations
 from calibration import ddm_calibration
@@ -124,8 +123,6 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
 
 
 if __name__ == "__main__":
-    start = timer()
-
     argparser = argparse.ArgumentParser(
         description="Process L1 science file from L0 netCDF."
     )
@@ -332,5 +329,3 @@ if __name__ == "__main__":
         new_L1_file = L1_path.joinpath(Path(new_L1_file))
         process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
         # TODO flag to delete L0 file
-
-    print('Finished in', (timer() - start)/60, "minutes.")

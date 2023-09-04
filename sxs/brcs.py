@@ -3,7 +3,6 @@ import numpy as np
 from scipy import constants
 
 from calibration import db2power
-from utils import timeit
 
 
 def ddm_brcs2(power_analog_LHCP, power_analog_RHCP, eirp_watt, rx_gain_db_i, TSx, RSx):
@@ -71,7 +70,6 @@ def ddm_refl2(
     return refl_copol, refl_xpol
 
 
-@timeit
 def brcs_calculations(L0, L1):
     # separate copol and xpol gain for using later
     rx_gain_copol_LL = L1.sx_rx_gain_copol[:, :10]
@@ -145,8 +143,7 @@ def brcs_calculations(L0, L1):
                 refl_waveform_copol1 = np.sum(refl_copol1, axis=1)
                 norm_refl_waveform_copol1 = np.divide(
                     refl_waveform_copol1, np.nanmax(refl_waveform_copol1)
-                ).reshape(40, -1)  # TODO: large deviation with MATLAB from here, need to review.
-
+                ).reshape(40, -1)
                 refl_waveform_xpol1 = np.sum(refl_xpol1, axis=1)
                 norm_refl_waveform_xpol1 = np.divide(
                     refl_waveform_xpol1, np.nanmax(refl_waveform_xpol1)

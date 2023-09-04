@@ -3,7 +3,6 @@ import numpy as np
 
 from calibration import db2power
 from noise import meter2chips, delay_correction
-from utils import timeit
 
 
 def get_quality_flag(quality_flag1):
@@ -34,7 +33,6 @@ def get_quality_flag(quality_flag1):
     return quality_flag
 
 
-@timeit
 def quality_flag_calculations(
     L0,
     L1,
@@ -110,7 +108,9 @@ def quality_flag_calculations(
 
             # flag 12
             zenith_code_phase1 = L1.postCal["zenith_code_phase"][sec][ngrx_channel]
-            signal_code_phase1 = delay_correction(L0.delay_center_chips[sec][ngrx_channel], 1023)
+            signal_code_phase1 = delay_correction(
+                L0.delay_center_chips[sec][ngrx_channel], 1023
+            )
             diff1 = zenith_code_phase1 - signal_code_phase1
             if diff1 >= 10:
                 quality_flag1_1[12] = 1
