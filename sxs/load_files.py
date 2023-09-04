@@ -566,12 +566,14 @@ def load_orbit_file(settings, inp, gps_week, gps_tow, start_obj, end_obj, change
     # determine gps_week and day of the week (1-7)
     gps_week1, gps_dow1 = int(gps_week[0]), int(gps_tow[0] // 86400)
     # try loading in latest file name for data
+    attempted = []
     sp3_filename1 = (
         "IGS0OPSRAP_"
         + str(start_obj.year)
         + "{:03d}".format(start_obj.timetuple().tm_yday)  # match for the dropbox data
         + "0000_01D_15M_ORB.SP3"
     )
+    attempted.append(sp3_filename1)
     sp3_filename1_full = inp.orbit_path.joinpath(Path(sp3_filename1))
     if not os.path.isfile(sp3_filename1_full):
         # try downloading file from NASA (not implemented for old format...)
@@ -581,15 +583,18 @@ def load_orbit_file(settings, inp, gps_week, gps_tow, start_obj, end_obj, change
         if not success:
             # try loading in alternate name from local
             sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".SP3"
+            attempted.append(sp3_filename1)
             sp3_filename1_full = inp.orbit_path.joinpath(Path(sp3_filename1))
             if not os.path.isfile(sp3_filename1_full):
                 # try loading in earliest format name from local
                 sp3_filename1 = "igr" + str(gps_week1) + str(gps_dow1) + ".sp3"
+                attempted.append(sp3_filename1)
                 sp3_filename1_full = inp.orbit_path.joinpath(Path(sp3_filename1))
                 if not os.path.isfile(sp3_filename1_full):
                     # TODO implement a mechanism for last valid file?
                     raise Exception(
-                        "Orbit file not found locally or via NASA. Too soon for file release?"
+                        "Orbit file not found locally or via NASA. Too soon for file release? Attempted: "
+                        + ", ".join(attempted)
                     )
     if change_idx:
         # if change_idx then also determine the day priors orbit file and return both
