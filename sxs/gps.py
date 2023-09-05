@@ -219,7 +219,7 @@ def calculate_satellite_orbits(settings, L0, L1, inp):
     else:
         # find idx of day change in timestamps
         # np.diff does "arr_new[i] = arr[i+1] - arr[i]" thus +1 to find changed idx
-        change_idx = np.where(np.diff(np.floor(L1.gps_tow / 86400)) > 0)[0][0] + 1
+        change_idx = np.where(np.diff(np.floor(L1.gps_tow / 86400)) != 0)[0][0] + 1
         # determine day_N and day_N+1 orbit files to use
         orbit_file1, orbit_file2 = load_orbit_file(
             settings,
