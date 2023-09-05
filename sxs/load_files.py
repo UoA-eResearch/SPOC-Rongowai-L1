@@ -79,7 +79,7 @@ class L0_file:
         )
 
         # self.remove_leading_trailing_zeros()
-        # self.interpolate_zero_values()
+        self.interpolate_zero_values()
 
         # load in ddm-related variables
         # tx ID/satellite PRN
@@ -147,31 +147,31 @@ class L0_file:
         self.shape_2d = self.transmitter_id.shape
         self.shape_4d = self.raw_counts.shape
 
-    def remove_leading_trailing_zeros(self):
-        """
-        This function removes leading/trailing zeros, replaces sporadic
-        zeros with interpolated values
-        """
-        # get index of first and last zeros using a bit of Python array magic
-        # idx_min = first non-zero index, idx_max = index of first trailing zero
-        # thus end of range that we need to specify
-        temp = np.array(self.pvt_gps_week)
-        temp != 0
-        idx_min, idx_max = temp.argmax(), temp.size - temp[::-1].argmax()
-
-        self.pvt_gps_week = self.pvt_gps_week[idx_min:idx_max]
-        self.pvt_gps_sec = self.pvt_gps_sec[idx_min:idx_max]
-        self.rx_pos_x_pvt = self.rx_pos_x_pvt[idx_min:idx_max]
-        self.rx_pos_y_pvt = self.rx_pos_y_pvt[idx_min:idx_max]
-        self.rx_pos_z_pvt = self.rx_pos_z_pvt[idx_min:idx_max]
-        self.rx_vel_x_pvt = self.rx_vel_x_pvt[idx_min:idx_max]
-        self.rx_vel_y_pvt = self.rx_vel_y_pvt[idx_min:idx_max]
-        self.rx_vel_z_pvt = self.rx_vel_z_pvt[idx_min:idx_max]
-        self.rx_roll_pvt = self.rx_roll_pvt[idx_min:idx_max]
-        self.rx_pitch_pvt = self.rx_pitch_pvt[idx_min:idx_max]
-        self.rx_heading_pvt = self.rx_heading_pvt[idx_min:idx_max]
-        self.rx_clk_bias_m_pvt = self.rx_clk_bias_m_pvt[idx_min:idx_max]
-        self.rx_clk_drift_mps_pvt = self.rx_clk_drift_mps_pvt[idx_min:idx_max]
+    # def remove_leading_trailing_zeros(self):
+    #    """
+    #    This function removes leading/trailing zeros, replaces sporadic
+    #    zeros with interpolated values
+    #    """
+    #    # get index of first and last zeros using a bit of Python array magic
+    #    # idx_min = first non-zero index, idx_max = index of first trailing zero
+    #    # thus end of range that we need to specify
+    #    temp = np.array(self.pvt_gps_week)
+    #    temp != 0
+    #    idx_min, idx_max = temp.argmax(), temp.size - temp[::-1].argmax()
+    #
+    #    self.pvt_gps_week = self.pvt_gps_week[idx_min:idx_max]
+    #    self.pvt_gps_sec = self.pvt_gps_sec[idx_min:idx_max]
+    #    self.rx_pos_x_pvt = self.rx_pos_x_pvt[idx_min:idx_max]
+    #    self.rx_pos_y_pvt = self.rx_pos_y_pvt[idx_min:idx_max]
+    #    self.rx_pos_z_pvt = self.rx_pos_z_pvt[idx_min:idx_max]
+    #    self.rx_vel_x_pvt = self.rx_vel_x_pvt[idx_min:idx_max]
+    #    self.rx_vel_y_pvt = self.rx_vel_y_pvt[idx_min:idx_max]
+    #    self.rx_vel_z_pvt = self.rx_vel_z_pvt[idx_min:idx_max]
+    #    self.rx_roll_pvt = self.rx_roll_pvt[idx_min:idx_max]
+    #    self.rx_pitch_pvt = self.rx_pitch_pvt[idx_min:idx_max]
+    #    self.rx_heading_pvt = self.rx_heading_pvt[idx_min:idx_max]
+    #    self.rx_clk_bias_m_pvt = self.rx_clk_bias_m_pvt[idx_min:idx_max]
+    #    self.rx_clk_drift_mps_pvt = self.rx_clk_drift_mps_pvt[idx_min:idx_max]
 
     def interpolate_zero_values(self):
         """
