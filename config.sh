@@ -6,6 +6,11 @@
 # If not defined then default to ./out/
 #L1_L1_OUTPUT="/PATH/TO/L1_FILES"
 
+# ------------ L0 handling ---------------
+# Boolean flag to control whether to delete
+# L0 files once they are used to create a L1 file
+DELETE_LO_FILE=0
+
 # ----------- input dat files ------------
 # ./dat/A_phy_LUT/
 # A_phy_LUT files are hardocded for now

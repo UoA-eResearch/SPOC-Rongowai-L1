@@ -17,6 +17,7 @@ from quality_flags import quality_flag_calculations
 from specular import specular_calculations
 from coherence import coherence_detection
 from output import L1_file, write_netcdf
+from utils import OrbitFileDelayError
 
 
 def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
@@ -174,7 +175,7 @@ if __name__ == "__main__":
     settings = {
         "L1_L0_INPUT": "",
         "L1_L1_OUTPUT": "",
-        # "L1_A_PHY_LUT": "",
+        "DELETE_LO_FILE": "",
         "L1_LANDMASK": "",
         "L1_DEM": "",
         "L1_DTU": "",
@@ -327,5 +328,12 @@ if __name__ == "__main__":
         new_L1_file = os.path.basename(filepath).split(".")
         new_L1_file = new_L1_file[0] + "_L1." + new_L1_file[1]
         new_L1_file = L1_path.joinpath(Path(new_L1_file))
-        process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
-        # TODO flag to delete L0 file
+        try:
+            process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
+            if settings["DELETE_LO_FILE"]:
+                os.remove(str(filepath))
+        except OrbitFileDelayError as exc:
+            # print OrbitFileDelayError, but otherwise just skip this
+            # file until next time
+            print(exc)
+            continue

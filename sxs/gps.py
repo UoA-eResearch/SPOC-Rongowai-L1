@@ -1,9 +1,9 @@
+from ctypes import CDLL, c_double, c_uint, c_char_p, byref
 import os
+from pathlib import Path
 
 from astropy.time import Time as astro_time
-from ctypes import CDLL, c_double, c_uint, c_char_p, byref
 import numpy as np
-from pathlib import Path
 from scipy import constants
 
 from load_files import load_orbit_file

@@ -1,7 +1,8 @@
 from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from pathlib import Path
 import netCDF4 as nc
 
 from gps import gps2utc, utc2gps

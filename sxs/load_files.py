@@ -2,19 +2,21 @@
 # load_files.py
 # Functions relating to the finding, loading, and processing of input files
 
-import netCDF4 as nc
 import array
-import numpy as np
+import gzip
+from http.cookiejar import CookieJar
 import os
 from pathlib import Path
+import shutil
+import urllib
+
+import netCDF4 as nc
+import numpy as np
 from PIL import Image
 import rasterio
 from scipy.interpolate import interp1d, RegularGridInterpolator
-import urllib
-import os
-from http.cookiejar import CookieJar
-import gzip
-import shutil
+
+from utils import OrbitFileDelayError
 
 # Required to load the land cover mask file
 Image.MAX_IMAGE_PIXELS = None
@@ -592,7 +594,7 @@ def load_orbit_file(settings, inp, gps_week, gps_tow, start_obj, end_obj, change
                 sp3_filename1_full = inp.orbit_path.joinpath(Path(sp3_filename1))
                 if not os.path.isfile(sp3_filename1_full):
                     # TODO implement a mechanism for last valid file?
-                    raise Exception(
+                    raise OrbitFileDelayError(
                         "Orbit file not found locally or via NASA. Too soon for file release? Attempted: "
                         + ", ".join(attempted)
                     )

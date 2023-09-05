@@ -1,7 +1,7 @@
 import math
 import cmath
+
 import numpy as np
-from scipy.interpolate import interp1d
 
 
 def rongowaiWAF(doppler_center, delay_center, dim, delay_axis_chips):

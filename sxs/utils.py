@@ -1,8 +1,9 @@
+from datetime import datetime
 import math
+
 import numpy as np
 from rasterio.windows import Window
 from scipy.interpolate import interp1d
-from datetime import datetime
 
 # L = 18030
 # grid_res = 30  # L may need to be updated in the future
@@ -13,6 +14,10 @@ LOCAL_DEM_RES = 30
 LOCAL_DEM_MARGIN = 0
 LOCAL_NUM_PIXELS = int(LOCAL_DEM_L / LOCAL_DEM_RES)
 LOCAL_HALF_NP = int(LOCAL_NUM_PIXELS // 2)
+
+
+class OrbitFileDelayError(Exception):
+    pass
 
 
 def timeit(f):

@@ -1,7 +1,8 @@
 # mike.laverick@auckland.ac.nz
 # Specular point related functions
-import geopy.distance as geo_dist
 import math
+
+import geopy.distance as geo_dist
 from numba import njit
 from numba.typed import List as numba_list
 import numpy as np
