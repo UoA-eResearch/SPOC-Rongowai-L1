@@ -329,11 +329,11 @@ if __name__ == "__main__":
         new_L1_file = new_L1_file[0] + "_L1." + new_L1_file[1]
         new_L1_file = L1_path.joinpath(Path(new_L1_file))
         try:
+            process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
             # This flag is loaded as a string, so cast back to int to ensure it
             # is evaluated correctly!
             if int(settings["DELETE_LO_FILE"]):
                 os.remove(str(filepath))
-            process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
         except OrbitFileDelayError as exc:
             # print OrbitFileDelayError, but otherwise just skip this
             # file until next time
