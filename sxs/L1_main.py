@@ -323,7 +323,7 @@ if __name__ == "__main__":
     # find all L0 files in L0_path
     L0_files = [filepath for filepath in L0_path.glob("*.nc")]
 
-    for filepath in L0_files:
+    for filepath in sorted(L0_files):
         # print(filepath, os.path.basename(filepath))
         new_L1_file = os.path.basename(filepath).split(".")
         new_L1_file = new_L1_file[0] + "_L1." + new_L1_file[1]
