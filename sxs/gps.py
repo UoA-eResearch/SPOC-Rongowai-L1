@@ -196,7 +196,10 @@ def calculate_satellite_orbits(settings, L0, L1, inp):
     ]
 
     # determine whether flight spans a UTC day
-    if L1.time_coverage_start_obj.day == L1.time_coverage_end_obj.day:
+    # use GPS time for change of day detection for consistency with
+    # idx of change later (using UTC creates leapsecond detection differences)
+    gps_days_of_week = np.floor(L1.gps_tow / 86400)
+    if len(set(gps_days_of_week)) < 2:
         # determine single orbit file of that day
         orbit_file1 = load_orbit_file(
             settings,
