@@ -69,7 +69,7 @@ MEAN_SEA_SURFACE_VERSION="1"
 PER_BIN_ANT_VERSION="1"
 
 # global variables - update compliance results 30 June in MATLAB
-CONVENTIONS="CF-1.8, ACDD-1.3, ISO-8601"
+CONVENTIONS="CF-1.9, ACDD-1.3, ISO-8601"
 TITLE="Rongowai Level 1 Science Data Record Version 1.0"
 HISTORY="TBD"
 STANDARD_NAME_VOCABULARY="CF Standard Name Table v30"

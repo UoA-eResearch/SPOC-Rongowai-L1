@@ -50,7 +50,7 @@ class L1_file:
         self.postCal["mean_sea_surface_version"] = settings["MEAN_SEA_SURFACE_VERSION"]
         self.postCal["per_bin_ant_version"] = settings["PER_BIN_ANT_VERSION"]
 
-        self.postCal["conventions"] = settings["CONVENTIONS"]
+        self.postCal["Conventions"] = settings["CONVENTIONS"]
         self.postCal["title"] = settings["TITLE"]
         self.postCal["history"] = settings["HISTORY"]
         self.postCal["standard_name_vocabulary"] = settings["STANDARD_NAME_VOCABULARY"]
