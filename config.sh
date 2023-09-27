@@ -24,7 +24,7 @@ L1_DTU="dtu10_v1.dat"
 L1_SV_PRN="PRN_SV_LUT_v1.dat"
 L1_SV_eirp="GPS_SV_EIRP_Params_v7.dat"
 # ./dat/L1_Dict/
-L1_DICT="L1_Dict_v2_3.xlsx"
+L1_DICT="L1_Dict_v2_4.xlsx"
 # ./dat/L1a_cal/
 L1a_CAL_COUNTS="L1A_cal_ddm_counts_v2.dat"
 L1a_CAL_POWER="L1A_cal_ddm_power_v2.dat"
@@ -54,7 +54,7 @@ DDM_TIME_TYPE_SELECTOR=1
 DEM_SOURCE="SRTM30-200m"
 # write algorithm and LUT versions
 L1_ALGORITHM_VERSION="2.3"
-L1_DATA_VERSION="2.3"
+L1_DATA_VERSION="2.4"
 L1A_SIG_LUT_VERSION="1"
 L1A_NOISE_LUT_VERSION="1"
 A_LUT_VERSION="1.1"
