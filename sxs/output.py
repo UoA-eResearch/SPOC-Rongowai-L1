@@ -440,6 +440,10 @@ def write_netcdf(dict_in, definition_file, output_file):
                     var_k.units = ds_k["Units"].values[0]
                     var_k.long_name = ds_k["Long_name"].values[0]
                     var_k.comment = ds_k["Comment"].values[0]
+                    if ds_k["Standard_name"].item() != "<none>":
+                        ncfile.setncattr(
+                            "standard_name", str(ds_k["Standard_name"].values[0])
+                        )
                     var_k[:] = v
             else:  # variable
                 var_k = ncfile.createVariable(
@@ -448,6 +452,10 @@ def write_netcdf(dict_in, definition_file, output_file):
                 var_k.units = ds_k["Units"].values[0]
                 var_k.long_name = ds_k["Long_name"].values[0]
                 var_k.comment = ds_k["Comment"].values[0]
+                if ds_k["Standard_name"].item() != "<none>":
+                    ncfile.setncattr(
+                        "standard_name", str(ds_k["Standard_name"].values[0])
+                    )
                 if len(get_dimensions(ds_k)) == len(v.shape) == 1:
                     var_k[:] = v
                 elif len(get_dimensions(ds_k)) == len(v.shape) == 2:
