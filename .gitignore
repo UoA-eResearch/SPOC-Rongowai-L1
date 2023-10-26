@@ -1,6 +1,6 @@
 # Customised
 .idea/
-dat/
+#dat/
 out/
 *.nc
 *.npy
