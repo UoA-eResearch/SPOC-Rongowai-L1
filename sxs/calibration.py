@@ -176,7 +176,7 @@ def ddm_calibration(
     power_analog = L1.power_analog
     ddm_ant = L1.postCal["ddm_ant"]
     inst_gain = L1.postCal["inst_gain"]
-    noise_floor = L1.postCal["ddm_noise_floor"]
+    # noise_floor = L1.postCal["ddm_noise_floor"]
     # derive signal power
     # iterate over seconds of flight
     for sec in range(len(std_dev_rf1)):
@@ -210,8 +210,8 @@ def ddm_calibration(
             ddm_power_counts1 = raw_counts1 * first_scale_factor1
 
             # perform L1a calibration from Counts to Watts
-            ddm_power_watts1 = L1a_counts2watts2(
-                inp, ddm_power_counts1, ANZ_port1, std_dev1, noise_floor
+            ddm_power_watts1 = L1a_counts2watts(
+                inp, ddm_power_counts1, ANZ_port1, std_dev1  # noise_floor
             )
 
             # peak ddm location

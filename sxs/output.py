@@ -249,7 +249,7 @@ class L1_file:
         )
         self.time_coverage_end_obj = datetime.utcfromtimestamp(ddm_utc[-1])
         self.postCal["time_coverage_end"] = self.time_coverage_end_obj.strftime(
-            "%d-%m-%Y %H:%M:%S"
+            "%Y-%m-%d %H:%M:%S"
         )
         self.postCal["time_coverage_resolution"] = ddm_utc[1] - ddm_utc[0]
 
