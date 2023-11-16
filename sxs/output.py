@@ -88,6 +88,9 @@ class L1_file:
         self.postCal["rx_clk_bias_pvt"] = L0.rx_clk_bias_m_pvt
         self.postCal["rx_clk_drift_pvt"] = L0.rx_clk_drift_mps_pvt
         self.postCal["zenith_sig_i2q2"] = L0.zenith_i2q2
+        self.postCal["fsw_version"] = L0.fsw_version
+        self.postCal["dcp_version"] = L0.dcp_version
+        self.postCal["coh_int"] = L0.coh_int
 
     def initialise_empties(self, L0):
         self.postCal["tx_pos_x"] = np.full([*L0.shape_2d], np.nan)

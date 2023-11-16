@@ -3,6 +3,7 @@
 # Functions relating to the finding, loading, and processing of input files
 
 import array
+from collections import Counter
 import gzip
 from http.cookiejar import CookieJar
 import os
@@ -147,31 +148,28 @@ class L0_file:
         self.shape_2d = self.transmitter_id.shape
         self.shape_4d = self.raw_counts.shape
 
-    # def remove_leading_trailing_zeros(self):
-    #    """
-    #    This function removes leading/trailing zeros, replaces sporadic
-    #    zeros with interpolated values
-    #    """
-    #    # get index of first and last zeros using a bit of Python array magic
-    #    # idx_min = first non-zero index, idx_max = index of first trailing zero
-    #    # thus end of range that we need to specify
-    #    temp = np.array(self.pvt_gps_week)
-    #    temp != 0
-    #    idx_min, idx_max = temp.argmax(), temp.size - temp[::-1].argmax()
-    #
-    #    self.pvt_gps_week = self.pvt_gps_week[idx_min:idx_max]
-    #    self.pvt_gps_sec = self.pvt_gps_sec[idx_min:idx_max]
-    #    self.rx_pos_x_pvt = self.rx_pos_x_pvt[idx_min:idx_max]
-    #    self.rx_pos_y_pvt = self.rx_pos_y_pvt[idx_min:idx_max]
-    #    self.rx_pos_z_pvt = self.rx_pos_z_pvt[idx_min:idx_max]
-    #    self.rx_vel_x_pvt = self.rx_vel_x_pvt[idx_min:idx_max]
-    #    self.rx_vel_y_pvt = self.rx_vel_y_pvt[idx_min:idx_max]
-    #    self.rx_vel_z_pvt = self.rx_vel_z_pvt[idx_min:idx_max]
-    #    self.rx_roll_pvt = self.rx_roll_pvt[idx_min:idx_max]
-    #    self.rx_pitch_pvt = self.rx_pitch_pvt[idx_min:idx_max]
-    #    self.rx_heading_pvt = self.rx_heading_pvt[idx_min:idx_max]
-    #    self.rx_clk_bias_m_pvt = self.rx_clk_bias_m_pvt[idx_min:idx_max]
-    #    self.rx_clk_drift_mps_pvt = self.rx_clk_drift_mps_pvt[idx_min:idx_max]
+        # derive FSW & DCP versions, and coherent integration time
+        self.fsw_major = self.compress(ds["/eng/fsw_major_version_number"]).astype(str)
+        self.fsw_minor = self.compress(ds["/eng/fsw_minor_version_number"]).astype(str)
+        self.fsw_build = self.compress(ds["/eng/fsw_build_number"]).astype(str)
+        self.dcp_major = self.compress(ds["/eng/dcp_major_version_number"]).astype(str)
+        self.dcp_minor = self.compress(ds["/eng/dcp_minor_version_number"]).astype(str)
+        self.dcp_build = self.compress(ds["/eng/dcp_build_number"]).astype(str)
+        self.coh_int_times = self.compress(ds["/science/ddm/L1_E1_coherent_duration"])
+        # Likely we'll never have more than one version during a flight,
+        # but just in case!
+        fsw_versions = []
+        dcp_versions = []
+        for i in range(len(self.fsw_major)):
+            fsw_versions.append(
+                ".".join([self.fsw_major[i], self.fsw_minor[i], self.fsw_build[i]])
+            )
+            dcp_versions.append(
+                ".".join([self.dcp_major[i], self.dcp_minor[i], self.dcp_build[i]])
+            )
+        self.fsw_version = Counter(fsw_versions).most_common(1)[0][0]
+        self.dcp_version = Counter(dcp_versions).most_common(1)[0][0]
+        self.coh_int = Counter(self.coh_int_times).most_common(1)[0][0]
 
     def interpolate_zero_values(self):
         """
