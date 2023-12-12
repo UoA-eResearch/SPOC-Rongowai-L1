@@ -64,6 +64,17 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
     lon_index = np.argmin(abs(dem["lon"] - sx_pos_lla[1]))
     lat_index = np.argmin(abs(dem["lat"] - sx_pos_lla[0]))
 
+    # Add in a quick buffer to prevent local_DEM exceeding boundaries.
+    # Elevation at edge of DEMs is over water so 0... no difference if indexes shifted by a few places.
+    if lat_index < LOCAL_HALF_NP:
+        lat_index = LOCAL_HALF_NP
+    if lon_index < LOCAL_HALF_NP:
+        lon_index = LOCAL_HALF_NP
+    if lat_index > (dem["lat"].shape[0] - LOCAL_HALF_NP):
+        lat_index = dem["lat"].shape[0] - LOCAL_HALF_NP
+    if lon_index > (dem["lon"].shape[0] - LOCAL_HALF_NP):
+        lon_index = dem["lon"].shape[0] - LOCAL_HALF_NP
+
     local_lon = dem["lon"][lon_index - LOCAL_HALF_NP : lon_index + LOCAL_HALF_NP + 1]
     local_lat = dem["lat"][lat_index - LOCAL_HALF_NP : lat_index + LOCAL_HALF_NP + 1]
 

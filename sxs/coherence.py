@@ -213,6 +213,21 @@ def coherence_detection(L0, L1, rx_pos_lla):
         ddm = ddm[idx, :, :]
         index = [index[i] for i in idx]
 
+        # remove "flat DDMs" where 40x5 of the same value
+        idx = []
+        for i in range(ddm.shape[0]):
+            # get DDM and element[0,0]
+            check_ddm = ddm[i, :, :]
+            check = ddm[i, 0, 0]
+            # if all DDM elements not identical to elem[0,0]
+            if np.all(check_ddm != check):
+                # add i to idx to retain sample
+                idx.append(i)
+        # as before, retain samples that are valid DDMs
+        altitude = [altitude[i] for i in idx]
+        ddm = ddm[idx, :, :]
+        index = [index[i] for i in idx]
+
         peak_delay_row_index = np.full(len(altitude), np.nan)
         for z in range(len(altitude)):
             i = index[z]
