@@ -50,24 +50,6 @@ class L0_file:
         self.mask = np.ma.mask_or(self.eng_nans, self.sci_nans)
         self.mask = np.ma.mask_or(self.mask, self.ddm_nans)
 
-        # mask out DDMs where counts are identical for all 40x5 cells
-        self.raw_counts = ds["/science/ddm/counts"][:]
-        for i in range(self.raw_counts.shape[0]):
-            # iterate over non-masked points
-            if not self.mask[i]:
-                for j in range(self.raw_counts.shape[1]):
-                    # check that DDM elements are all the same
-                    check_ddm = self.raw_counts[i, j, :, :]
-                    check = self.raw_counts[i, j, 0, 0]
-                    # exclude 0 and fill values from check
-                    if (
-                        np.all(check_ddm == check)
-                        and check != self.raw_counts.fill_value
-                        and check != 0
-                    ):
-                        # instead of masking row, replace individual DDM with zeros
-                        self.raw_counts[i, j, :, :] = np.zeros(check_ddm.shape)
-
         # load in rx-related variables
         # PVT GPS week and sec
         self.pvt_gps_week = self.compress(ds["/science/GPS_week_of_SC_attitude"])
