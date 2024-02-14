@@ -220,9 +220,11 @@ def coherence_detection(L0, L1, rx_pos_lla):
             check_ddm = ddm[i, :, :]
             check = ddm[i, 0, 0]
             # if all DDM elements not identical to elem[0,0]
-            if np.all(check_ddm != check):
-                # add i to idx to retain sample
-                idx.append(i)
+            if np.all(check_ddm == check):
+                # skip if entire DDM is same value
+                continue
+            # add i to idx to retain sample
+            idx.append(i)
         # as before, retain samples that are valid DDMs
         altitude = [altitude[i] for i in idx]
         ddm = ddm[idx, :, :]
@@ -262,17 +264,17 @@ def coherence_detection(L0, L1, rx_pos_lla):
             ):
                 coherence_state[i, channel] = 5  # Uncertain coherence state
             elif coherence_metric[i, channel] <= 0.25:
-                coherence_state[
-                    i, channel
-                ] = 1  # With high confidence, state is dominantly coherent
+                coherence_state[i, channel] = (
+                    1  # With high confidence, state is dominantly coherent
+                )
             elif 0.25 < coherence_metric[i, channel] <= 0.50:
                 coherence_state[i, channel] = 2  # State is likely coherent
             elif 0.50 < coherence_metric[i, channel] < 0.75:
                 coherence_state[i, channel] = 3  # State is likely mixed/weakly diffuse
             elif coherence_metric[i, channel] >= 0.75:
-                coherence_state[
-                    i, channel
-                ] = 4  # With high confidence, state is dominantly incoherent
+                coherence_state[i, channel] = (
+                    4  # With high confidence, state is dominantly incoherent
+                )
 
     L1.postCal["coherence_metric"] = np.concatenate(
         (coherence_metric, coherence_metric), axis=1
