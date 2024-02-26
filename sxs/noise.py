@@ -22,6 +22,7 @@ def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
     # common parameters
     fc = 1575.42e6  # L1 carrier frequency in Hz
     _lambda = constants.c / fc  # wavelength
+    fclk_drift = 150
 
     V_tp = tx_pos_xyz - p_xyz
     R_tp = np.linalg.norm(V_tp, 2)
@@ -40,7 +41,7 @@ def deldop(tx_pos_xyz, rx_pos_xyz, tx_vel_xyz, rx_vel_xyz, p_xyz):
     term1 = np.dot(tx_vel_xyz, V_tp_unit)
     term2 = np.dot(rx_vel_xyz, V_rp_unit)
 
-    doppler_hz = -1 * (term1 + term2) / _lambda  # Doppler in Hz
+    doppler_hz = -1 * (term1 + term2) / _lambda - fclk_drift  # Doppler in Hz
 
     return delay_chips, doppler_hz, add_delay_chips
 
@@ -176,7 +177,7 @@ def noise_floor_prep(
                 d_delay_chips1 = meter2chips(d_add_range1)
                 d_delay_bin1 = d_delay_chips1 / L0.delay_bin_res
 
-                sp_delay_row1 = L0.center_delay_bin - d_delay_bin1
+                sp_delay_row1 = L0.center_delay_bin - d_delay_bin1 -1
 
                 # SP doppler value
                 _, sp_doppler_hz1, _ = deldop(
