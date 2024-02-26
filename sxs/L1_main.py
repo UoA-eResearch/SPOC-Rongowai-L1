@@ -1,9 +1,11 @@
 # mike.laverick@auckland.ac.nz
 # L1_main_L0.py
 import argparse
+import datetime
 import os
 from pathlib import Path
 import warnings
+import pytz
 
 warnings.simplefilter(action="ignore", category=RuntimeWarning)
 from aeff import aeff_and_nbrcs
@@ -276,6 +278,7 @@ if __name__ == "__main__":
     orbit_path = this_dir.joinpath(Path("../dat/orbits/"))
     pek_path = this_dir.joinpath(Path("../dat/pek/"))
     rng_path = this_dir.joinpath(Path("../dat/rng/"))
+    lookup_csv_path = this_dir.joinpath(Path("../dat/lookup/lookup.csv"))
 
     # L1_A_PHY_LUT = A_phy_LUT_path.joinpath(Path(settings["L1_A_PHY_LUT"]))
     # load ocean/land (distance to coast) mask
@@ -304,21 +307,6 @@ if __name__ == "__main__":
     rng_filenames = [L1_LHCP_L, L1_LHCP_R, L1_RHCP_L, L1_RHCP_R]
 
     # set up input class that holds all input file data
-    inp = input_files(
-        L1a_CAL_COUNTS,
-        L1a_CAL_POWER,
-        L1_DEM,
-        L1_DTU,
-        L1_LANDMASK,
-        L1_LANDCOVER,
-        water_mask_paths,
-        pek_path,
-        L1_SV_PRN,
-        L1_SV_eirp,
-        rng_filenames,
-        A_phy_LUT_path,
-        orbit_path,
-    )
 
     # find all L0 files in L0_path
     L0_files = [filepath for filepath in L0_path.glob("*.nc")]
@@ -326,8 +314,32 @@ if __name__ == "__main__":
     for filepath in sorted(L0_files):
         # print(filepath, os.path.basename(filepath))
         new_L1_file = os.path.basename(filepath).split(".")
+        print(new_L1_file)
+        file_timestamp = datetime.datetime.strptime(new_L1_file[0].split("_NZ")[0], "%Y%m%d-%H%M%S").replace(
+            tzinfo=pytz.timezone("Pacific/Auckland"))
+        file_timestamp = file_timestamp.astimezone(pytz.timezone("UTC")).replace(tzinfo=None)
+        print(file_timestamp)
         new_L1_file = new_L1_file[0] + "_L1." + new_L1_file[1]
         new_L1_file = L1_path.joinpath(Path(new_L1_file))
+
+        inp = input_files(
+            L1a_CAL_COUNTS,
+            L1a_CAL_POWER,
+            L1_DEM,
+            L1_DTU,
+            L1_LANDMASK,
+            L1_LANDCOVER,
+            water_mask_paths,
+            pek_path,
+            L1_SV_PRN,
+            L1_SV_eirp,
+            rng_filenames,
+            A_phy_LUT_path,
+            orbit_path,
+            file_timestamp,
+            lookup_csv_path,
+            this_dir
+        )
         try:
             process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
             # This flag is loaded as a string, so cast back to int to ensure it
