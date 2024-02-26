@@ -13,6 +13,7 @@ import urllib
 
 import netCDF4 as nc
 import numpy as np
+import pandas as pd
 from PIL import Image
 import rasterio
 from scipy.interpolate import interp1d, RegularGridInterpolator
@@ -255,7 +256,27 @@ class input_files:
         rng_filenames,
         A_phy_LUT_path,
         orbit_path,
+        file_time,
+        lookup_csv_path,
+        this_dir
     ):
+        lookup_df = pd.read_csv(lookup_csv_path)
+        lookup_df['startTime'] = pd.to_datetime(lookup_df['startTime'])
+        lookup_df['endTime'] = pd.to_datetime(lookup_df['endTime'])
+
+        mask = (lookup_df['startTime'] <= file_time) & (file_time <= lookup_df['endTime'])
+
+        filtered_df = lookup_df[mask]
+        if not filtered_df.empty:
+            cohInt = int(filtered_df["cohInt"].iloc[0])
+            cancel = bool(filtered_df["cancel"].iloc[0])
+            if cancel:
+                raise ValueError("L0 is from timestamp where we should not process it.")
+            L1a_cal_ddm_power_filename = this_dir.joinpath(
+                Path(f"../dat/L1a_cal/L1A_cal_ddm_power_dB_{str(cohInt)}ms.dat"))
+        else:
+            raise ValueError("Couldn't match timestamp to time in lookup csv.")
+
         self.L1a_cal_ddm_counts = np.loadtxt(L1a_cal_ddm_counts_filename)
         self.L1a_cal_ddm_power = np.loadtxt(L1a_cal_ddm_power_filename)
 
@@ -309,19 +330,34 @@ class input_files:
         }
 
         # scattering area LUT - load in 4D array from range of files
-        A_PHY_LUT_paths = {
-            "A_phy_LUT_-0.5.dat": -0.5,
-            "A_phy_LUT_-0.4.dat": -0.4,
-            "A_phy_LUT_-0.3.dat": -0.3,
-            "A_phy_LUT_-0.2.dat": -0.2,
-            "A_phy_LUT_-0.1.dat": -0.1,
-            "A_phy_LUT_0.0.dat": 0.0,
-            "A_phy_LUT_0.1.dat": 0.1,
-            "A_phy_LUT_0.2.dat": 0.2,
-            "A_phy_LUT_0.3.dat": 0.3,
-            "A_phy_LUT_0.4.dat": 0.4,
-            "A_phy_LUT_0.5.dat": 0.5,
-        }
+        if cohInt < 8:
+            A_PHY_LUT_paths = {
+                "lessThan8/A_phy_LUT_-0.5.dat": -0.5,
+                "lessThan8/A_phy_LUT_-0.4.dat": -0.4,
+                "lessThan8/A_phy_LUT_-0.3.dat": -0.3,
+                "lessThan8/A_phy_LUT_-0.2.dat": -0.2,
+                "lessThan8/A_phy_LUT_-0.1.dat": -0.1,
+                "lessThan8/A_phy_LUT_0.0.dat": 0.0,
+                "lessThan8/A_phy_LUT_0.1.dat": 0.1,
+                "lessThan8/A_phy_LUT_0.2.dat": 0.2,
+                "lessThan8/A_phy_LUT_0.3.dat": 0.3,
+                "lessThan8/A_phy_LUT_0.4.dat": 0.4,
+                "lessThan8/A_phy_LUT_0.5.dat": 0.5,
+            }
+        elif cohInt >= 8:
+            A_PHY_LUT_paths = {
+                "moreThan8/A_phy_LUT_-0.5.dat": -0.5,
+                "moreThan8/A_phy_LUT_-0.4.dat": -0.4,
+                "moreThan8/A_phy_LUT_-0.3.dat": -0.3,
+                "moreThan8/A_phy_LUT_-0.2.dat": -0.2,
+                "moreThan8/A_phy_LUT_-0.1.dat": -0.1,
+                "moreThan8/A_phy_LUT_0.0.dat": 0.0,
+                "moreThan8/A_phy_LUT_0.1.dat": 0.1,
+                "moreThan8/A_phy_LUT_0.2.dat": 0.2,
+                "moreThan8/A_phy_LUT_0.3.dat": 0.3,
+                "moreThan8/A_phy_LUT_0.4.dat": 0.4,
+                "moreThan8/A_phy_LUT_0.5.dat": 0.5,
+            }
         A_PHY_LUT_INPUTS = A_phy_LUT_path.joinpath(Path("input_variables.dat"))
         (
             self.rx_alt_bins,
