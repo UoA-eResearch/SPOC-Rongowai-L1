@@ -71,7 +71,7 @@ def process_L1s(L0_filename, L1_filename, inp, L1_DICT, settings):
     ddm_calibration(
         inp,
         L0,
-        L1
+        L1,
         # L0.std_dev_rf1,
         # L0.std_dev_rf2,
         # L0.std_dev_rf3,
@@ -314,11 +314,14 @@ if __name__ == "__main__":
     for filepath in sorted(L0_files):
         # print(filepath, os.path.basename(filepath))
         new_L1_file = os.path.basename(filepath).split(".")
-        print(new_L1_file)
-        file_timestamp = datetime.datetime.strptime(new_L1_file[0].split("_NZ")[0], "%Y%m%d-%H%M%S").replace(
-            tzinfo=pytz.timezone("Pacific/Auckland"))
-        file_timestamp = file_timestamp.astimezone(pytz.timezone("UTC")).replace(tzinfo=None)
-        print(file_timestamp)
+        # print(new_L1_file)
+        file_timestamp = datetime.datetime.strptime(
+            new_L1_file[0].split("_NZ")[0], "%Y%m%d-%H%M%S"
+        ).replace(tzinfo=pytz.timezone("Pacific/Auckland"))
+        file_timestamp = file_timestamp.astimezone(pytz.timezone("UTC")).replace(
+            tzinfo=None
+        )
+        # print(file_timestamp)
         new_L1_file = new_L1_file[0] + "_L1." + new_L1_file[1]
         new_L1_file = L1_path.joinpath(Path(new_L1_file))
 
@@ -338,7 +341,7 @@ if __name__ == "__main__":
             orbit_path,
             file_timestamp,
             lookup_csv_path,
-            this_dir
+            this_dir,
         )
         try:
             process_L1s(filepath, new_L1_file, inp, L1_DICT, settings)
@@ -349,5 +352,5 @@ if __name__ == "__main__":
         except OrbitFileDelayError as exc:
             # print OrbitFileDelayError, but otherwise just skip this
             # file until next time
-            print(exc)
+            # print(exc)
             continue
