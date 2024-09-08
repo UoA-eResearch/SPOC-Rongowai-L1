@@ -21,8 +21,8 @@ L1_DEM="dem_200m.dat"
 # ./dat/dtu/
 L1_DTU="dtu10_v1.dat"
 # ./dat/gps/
-L1_SV_PRN="PRN_SV_LUT_v1.dat"
-L1_SV_eirp="GPS_SV_EIRP_Params_v7.dat"
+L1_SV_PRN="PRN_SV_LUT_v2.dat"
+L1_SV_eirp="GPS_SV_EIRP_Params_v9.dat"
 # ./dat/L1_Dict/
 L1_DICT="L1_Dict_v2_4.xlsx"
 # ./dat/L1a_cal/
@@ -35,10 +35,10 @@ L1_LANDCOVER="lcv.png"
 # ./dat/pek/
 ## water_mask_paths are hardcoded for now
 # ./dat/rng/
-L1_LHCP_L="GNSS_LHCP_L_gain_db_i_v2.dat"
-L1_LHCP_R="GNSS_LHCP_R_gain_db_i_v2.dat"
-L1_RHCP_L="GNSS_RHCP_L_gain_db_i_v2.dat"
-L1_RHCP_R="GNSS_RHCP_R_gain_db_i_v2.dat"
+L1_LHCP_L="GNSS_LHCP_L_gain_db_i_v3.dat"
+L1_LHCP_R="GNSS_LHCP_R_gain_db_i_v3.dat"
+L1_RHCP_L="GNSS_RHCP_L_gain_db_i_v3.dat"
+L1_RHCP_R="GNSS_RHCP_R_gain_db_i_v3.dat"
 
 # Credentials for automated orbital retrieval via cddis.nasa.gov
 L1_CDDIS_USERNAME="USERNAME"
@@ -61,8 +61,8 @@ A_LUT_VERSION="1.1"
 NGRX_PORT_MAPPING_VERSION="1"
 NADIR_ANT_DATA_VERSION="2"
 ZENITH_ANT_DATA_VERSION="1"
-PRN_SV_MAPS_VERSION="1"
-GPS_EIRP_PARAM_VERSION="7"
+PRN_SV_MAPS_VERSION="2"
+GPS_EIRP_PARAM_VERSION="9"
 LAND_MASK_VERSION="1"
 SURFACE_TYPE_VERSION="1"
 MEAN_SEA_SURFACE_VERSION="1"
