@@ -142,7 +142,10 @@ def get_landcover_type2(lat_P, lon_P, lcv_mask):
     lat_index = math.ceil((lat_max - lat_P) / lat_res) - 1
     lon_index = math.ceil((lon_P - lon_min) / lon_res) - 1
 
-    lcv_RGB1 = lcv_mask.getpixel((lon_index, lat_index))
+    try:
+        lcv_RGB1 = lcv_mask.getpixel((lon_index, lat_index))
+    except IndexError:
+        lcv_RGB1 = (255, 255, 255, 255)
     # drop alpha channel in index 3
     lcv_RGB = tuple([z / 255 for z in lcv_RGB1[:3]])
     color = [

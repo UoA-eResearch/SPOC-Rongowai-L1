@@ -309,7 +309,8 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     % 1) sx_pos_xyz: sx positions in ECEF
     % 2) in_angle_deg: local incidence angle at the specular reflection
     % 3) distance to coast in kilometer
-    % 4) LOS flag"""
+    % 4) error: returns true if point falls outside landmask area
+"""
 
     # derive SP coordinate on WGS84 and DTU10
     sx_xyz_coarse, sx_lla_coarse = coarsetune(tx_pos_xyz, rx_pos_xyz)
@@ -325,7 +326,10 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     )
     # sx_pos_xyz = lla2ecef.transform(*sx_pos_lla, radians=False)
     # replaces get_map_value function
-    dist = dist_to_coast_nz((sx_pos_lla[0], sx_pos_lla[1]))
+    try:
+        dist = dist_to_coast_nz((sx_pos_lla[0], sx_pos_lla[1]))
+    except ValueError:
+        return 0, 0, 0, 0, True
     # dist = get_map_value(sx_pos_lla[0], sx_pos_lla[1], dist_to_coast_nz)
 
     local_dem = get_local_dem(sx_pos_lla, dem, dtu10, dist)
@@ -356,7 +360,7 @@ def sp_solver(tx_pos_xyz, rx_pos_xyz, dem, dtu10, dist_to_coast_nz):
     d_phi = np.rad2deg(np.arctan(d_phi1))
     d_snell_deg = abs(theta_i - theta_s) + abs(d_phi)
 
-    return sx_pos_xyz, inc_angle_deg, d_snell_deg, dist  # , LOS_flag
+    return sx_pos_xyz, inc_angle_deg, d_snell_deg, dist, False  # , LOS_flag
 
 
 def ecef2orf(P, V, S_ecef):
@@ -695,12 +699,17 @@ def specular_calculations(
                         inc_angle_deg1,
                         d_snell_deg1,
                         dist_to_coast_km1,
+                        error,
                     ) = sp_solver(
                         tx_pos_xyz1, rx_pos_xyz1, inp.dem, inp.dtu10, inp.landmask_nz
                     )
+                    if error:
+                        # Falls outside landmask area, so don't continue with processing
+                        break
 
                     (
                         sx_pos_xyz_dt,
+                        _,
                         _,
                         _,
                         _,
