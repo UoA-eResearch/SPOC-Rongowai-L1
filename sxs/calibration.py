@@ -56,7 +56,9 @@ def L1a_counts2watts(inp, ddm_counts, ANZ_port, std_dev):
 
     # convert to dB scale
     ddm_counts_db = 10 * np.log10(ddm_counts)
-    std_dev_db_ch = 20 * np.log10(std_dev_ch)
+    # std_dev_db_ch = 20 * np.log10(std_dev_ch)
+    # hardcoded on 22 july 2024
+    std_dev_db_ch = 61.344
 
     # evaluate ddm power in dBm
     # Scipy doesn't like masked arrays, so undo here and reply after
