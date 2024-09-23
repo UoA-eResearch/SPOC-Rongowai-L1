@@ -316,7 +316,7 @@ if __name__ == "__main__":
         new_L1_file = os.path.basename(filepath).split(".")
         # print(new_L1_file)
         file_timestamp = datetime.datetime.strptime(
-            new_L1_file[0].split("_NZ")[0], "%Y%m%d-%H%M%S"
+            new_L1_file[0].split("_")[0], "%Y%m%d-%H%M%S"
         ).replace(tzinfo=pytz.timezone("Pacific/Auckland"))
         file_timestamp = file_timestamp.astimezone(pytz.timezone("UTC")).replace(
             tzinfo=None

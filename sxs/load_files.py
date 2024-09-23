@@ -227,9 +227,12 @@ class L0_file:
         if len(netcdf_variable.shape[:]) == 1:
             return netcdf_variable[~self.mask].compressed()
         if len(netcdf_variable.shape[:]) == 2:
-            return np.ma.compress_rows(
-                np.ma.masked_invalid(netcdf_variable[~self.mask])
-            )
+            # initial masking of rows using L0 file mask
+            remaining_rows = np.ma.masked_invalid(netcdf_variable[~self.mask])
+            # fill in any remaining i,j masked values in 2D array
+            # with minimum array value... not perfect.
+            filled_data = np.ma.filled(remaining_rows, fill_value=np.min(remaining_rows))
+            return np.array(filled_data.data)
         if len(netcdf_variable.shape[:]) == 4:
             # note: this results in a masked array that needs special treatment
             # before use with scipy
