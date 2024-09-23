@@ -159,6 +159,15 @@ def satellite_orbits(
             # assign C++ values to corresponding array indexes,
             # duplicating for left/right mirroring in DDMs
             posx, posy, posz, bias, velx, vely, velz, _ = sat_pos
+
+            # if the return results are smaller than 1e-300 then the results are
+            # probably rubbish and will raise math domain errors later... skip!
+            check = np.asarray(sat_pos)
+            check = check[check < 1e-300]
+            check = check[check > 0]
+            if len(check):
+                continue
+
             tx_pos_x[sec][ngrx_channel] = tx_pos_x[sec][ngrx_channel + J_2] = posx
             tx_pos_y[sec][ngrx_channel] = tx_pos_y[sec][ngrx_channel + J_2] = posy
             tx_pos_z[sec][ngrx_channel] = tx_pos_z[sec][ngrx_channel + J_2] = posz
