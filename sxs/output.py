@@ -296,7 +296,7 @@ class L1_file:
         self.postCal["sp_ngrx_delay_correction"] = self.sp_delay_error
         self.postCal["sp_ngrx_dopp_correction"] = self.sp_doppler_error
         self.postCal["ddm_snr_flag"] = self.snr_flag
-        self.postCal["confidence_flag"] = self.confidence_flag
+        self.postCal["sp_confidence_flag"] = self.confidence_flag
         self.postCal["surface_reflectivity_peak"] = self.sp_refl
         self.postCal["eff_scatter"] = self.A_eff
         self.postCal["ddm_nbrcs"] = self.nbrcs
