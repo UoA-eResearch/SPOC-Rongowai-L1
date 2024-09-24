@@ -66,14 +66,15 @@ def get_local_dem(sx_pos_lla, dem, dtu10, dist):
 
     # Add in a quick buffer to prevent local_DEM exceeding boundaries.
     # Elevation at edge of DEMs is over water so 0... no difference if indexes shifted by a few places.
-    if lat_index < LOCAL_HALF_NP:
-        lat_index = LOCAL_HALF_NP
-    if lon_index < LOCAL_HALF_NP:
-        lon_index = LOCAL_HALF_NP
-    if lat_index > (dem["lat"].shape[0] - LOCAL_HALF_NP):
-        lat_index = dem["lat"].shape[0] - LOCAL_HALF_NP
-    if lon_index > (dem["lon"].shape[0] - LOCAL_HALF_NP):
-        lon_index = dem["lon"].shape[0] - LOCAL_HALF_NP
+    # added in an extra +/- 2 due to issues with partial shifting back into frame/data
+    if lat_index <= LOCAL_HALF_NP:
+        lat_index = LOCAL_HALF_NP + 2
+    if lon_index <= LOCAL_HALF_NP:
+        lon_index = LOCAL_HALF_NP + 2
+    if lat_index >= (dem["lat"].shape[0] - LOCAL_HALF_NP):
+        lat_index = dem["lat"].shape[0] - LOCAL_HALF_NP - 2
+    if lon_index >= (dem["lon"].shape[0] - LOCAL_HALF_NP):
+        lon_index = dem["lon"].shape[0] - LOCAL_HALF_NP - 2
 
     local_lon = dem["lon"][lon_index - LOCAL_HALF_NP : lon_index + LOCAL_HALF_NP + 1]
     local_lat = dem["lat"][lat_index - LOCAL_HALF_NP : lat_index + LOCAL_HALF_NP + 1]
