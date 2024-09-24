@@ -107,9 +107,11 @@ def coarsetune(tx_pos_xyz, rx_pos_xyz):
     SP_lla_coarse = ecef2lla.transform(*SP_xyz_coarse, radians=False)
     # longitude adjustment
     if SP_lla_coarse[0] < 0:
-        SP_lla_coarse[0] += 360
+        #SP_lla_coarse[0] += 360
+        SP_lla_coarse = (SP_lla_coarse[0] + 360, SP_lla_coarse[1], SP_lla_coarse[2])
     elif SP_lla_coarse[0] > 360:
-        SP_lla_coarse[0] -= 360
+        #SP_lla_coarse[0] -= 360
+        SP_lla_coarse = (SP_lla_coarse[0] - 360, SP_lla_coarse[1], SP_lla_coarse[2])
     # change order to lat, lon, alt
     SP_lla_coarse = SP_lla_coarse[1], SP_lla_coarse[0], SP_lla_coarse[2]
     return SP_xyz_coarse, SP_lla_coarse
