@@ -202,13 +202,13 @@ def coherence_detection(L0, L1, rx_pos_lla):
 
         # select valid DDMs
         zeros_check = np.squeeze(np.sum(np.sum(ddm, 2), 1))  # select valid DDMs
-        idx = np.squeeze(np.argwhere(zeros_check > 0))
+        idx = np.atleast_1d(np.squeeze(np.argwhere(zeros_check > 0)))
         altitude = [altitude[i] for i in idx]
         ddm = ddm[idx, :, :]
         index = [index[i] for i in idx]
 
         nan_check = np.squeeze(np.sum(np.sum(ddm, 2), 1))
-        idx = np.squeeze(np.argwhere(~np.isnan(nan_check)))
+        idx = np.atleast_1d(np.squeeze(np.argwhere(~np.isnan(nan_check))))
         altitude = [altitude[i] for i in idx]
         ddm = ddm[idx, :, :]
         index = [index[i] for i in idx]
@@ -240,7 +240,7 @@ def coherence_detection(L0, L1, rx_pos_lla):
             peak_delay_row_index[z] = m
 
         # detection not attempted if peak exceeds this limit
-        idx = np.squeeze(np.argwhere(peak_delay_row_index <= max_peak_delay_row))
+        idx = np.atleast_1d(np.squeeze(np.argwhere(peak_delay_row_index <= max_peak_delay_row)))
         ddm = ddm[idx, :, :]
         index = [index[i] for i in idx]
         altitude = [altitude[i] for i in idx]
