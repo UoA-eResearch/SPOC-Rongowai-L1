@@ -1,6 +1,6 @@
 # Customised
 .idea/
-#dat/
+dat/orbits
 out/
 *.nc
 *.npy
