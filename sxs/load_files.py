@@ -181,7 +181,7 @@ class L0_file:
         poor results if two zeros occur next to each other.
         """
 
-        def interp_funct(array):
+        def interp_funct(array, fill_value=(0, 0)):
             # 1D array of all indexes for linear interp 0:len(array)
             x = np.arange(len(array))
             # indexes of non-zero values that we wish to interp
@@ -192,12 +192,17 @@ class L0_file:
             if not idx.any():
                 return array
             # set up interp function using non-zero indexes and values
-            f = interp1d(x[idx], array[idx], bounds_error=False, fill_value=(0, 0))
+            f = interp1d(x[idx], array[idx], bounds_error=False, fill_value=fill_value)
             # return interpolated values for 1D array of all indexes 0:len(array)
             return f(x)
 
-        self.pvt_gps_week = interp_funct(self.pvt_gps_week)
-        self.pvt_gps_sec = interp_funct(self.pvt_gps_sec)
+        # Extrapolation required for the rare chance that a masked value randomly
+        # falls at the end of the GPSweek/GPSsecond array. Default of "0" does not
+        # work for GPSWeek/GPStime (causes silent fails), and so extrapolate.
+        # Note for future reader: if the extrapolation makes the GPSSec larger than the
+        # "rollover" limit into the next week, consider yourself very lucky indeed!
+        self.pvt_gps_week = interp_funct(self.pvt_gps_week, fill_value="extrapolate")
+        self.pvt_gps_sec = interp_funct(self.pvt_gps_sec, fill_value="extrapolate")
         self.rx_pos_x_pvt = interp_funct(self.rx_pos_x_pvt)
         self.rx_pos_y_pvt = interp_funct(self.rx_pos_y_pvt)
         self.rx_pos_z_pvt = interp_funct(self.rx_pos_z_pvt)
@@ -574,10 +579,19 @@ def retrieve_and_extract_orbit_file(settings, gps_week, gps_filename, orbit_path
     file_.write(DataBody)
     file_.close()
 
-    # unpack .gz file into .SP3 file
-    with gzip.open(gz_file_full, "rb") as f_in:
-        with open(sp3_file_full, "wb") as f_out:
-            shutil.copyfileobj(f_in, f_out)
+    # if this step fails it's likely an issue caused by the NASA portal being in
+    # maintenance mode. Delete file, raise error, and try again later.
+    try:
+        # unpack .gz file into .SP3 file
+        with gzip.open(gz_file_full, "rb") as f_in:
+            with open(sp3_file_full, "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+    except:
+        os.remove(gz_file_full)
+        raise OrbitFileDelayError(
+            "Error trying to open orbit file from NASA. Likely a upstream downtime issue? Attempted: "
+                + ", ".join(gps_filename) +". Try again next time."
+            )
     # delete .gz file
     os.remove(gz_file_full)
     return True
