@@ -313,7 +313,7 @@ class input_files:
         # }
 
         self.dtu10 = load_dat_file_grid(dtu_filename)
-        self.landmask_nz = load_dat_file_grid(landmask_filename)
+        self.landmask_nz = load_dat_file_grid(landmask_filename, bounds_error=False, fill_value=-1000)
         self.lcv_mask = Image.open(lcv_filename)
 
         self.water_mask = {}
@@ -652,7 +652,7 @@ def load_orbit_file(settings, inp, gps_week, gps_tow, start_obj, end_obj, change
 
 
 # load in map data binary files
-def load_dat_file_grid(filepath):
+def load_dat_file_grid(filepath, bounds_error=True, fill_value=None):
     """Load data from geospatial dat file.
 
     Parameters
@@ -681,7 +681,7 @@ def load_dat_file_grid(filepath):
 
     # create and return interpolator model for the grid file
     return RegularGridInterpolator(
-        (data["lat"], data["lon"]), data["ele"], bounds_error=True
+        (data["lat"], data["lon"]), data["ele"], bounds_error=bounds_error,  fill_value=fill_value
     )
 
 
