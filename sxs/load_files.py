@@ -225,7 +225,12 @@ class L0_file:
         netcdf_variable as N-D numpy.array
         """
         if len(netcdf_variable.shape[:]) == 1:
-            return netcdf_variable[~self.mask].compressed()
+            # initial masking of rows using L0 file mask
+            masked_data = netcdf_variable[~self.mask]
+            # fill in any remaining i masked values in 1D array
+            # with zero. Zero values are interpolated in the next steps.
+            filled_data = np.ma.filled(masked_data, fill_value=0)
+            return np.array(filled_data.data)
         if len(netcdf_variable.shape[:]) == 2:
             # initial masking of rows using L0 file mask
             remaining_rows = np.ma.masked_invalid(netcdf_variable[~self.mask])
